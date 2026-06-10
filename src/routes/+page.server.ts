@@ -1,12 +1,12 @@
 import type { PageServerLoad } from './$types';
 import { supabase } from '$lib/server/supabase';
-import { getGlobalStats, getModelLeaderboard } from '$lib/server/stats';
-import type { SafeBattle, Battle, Category } from '$lib/types';
+import { getGlobalStats } from '$lib/server/stats';
+import type { SafeBattle, Battle } from '$lib/types';
 
 export const load: PageServerLoad = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 
-	const [{ data: dailyBattle }, stats, leaderboard, { data: recentBattles }] = await Promise.all([
+	const [{ data: dailyBattle }, stats, { data: recentBattles }] = await Promise.all([
 		supabase
 			.from('battles')
 			.select('*')
@@ -15,12 +15,11 @@ export const load: PageServerLoad = async () => {
 			.limit(1)
 			.maybeSingle(),
 		getGlobalStats(),
-		getModelLeaderboard('weekly'),
 		supabase
 			.from('battles')
 			.select('*')
 			.order('created_at', { ascending: false })
-			.limit(10)
+			.limit(12)
 	]);
 
 	function toSafe(battle: Battle): SafeBattle {
@@ -36,7 +35,6 @@ export const load: PageServerLoad = async () => {
 	return {
 		daily: dailyBattle ? toSafe(dailyBattle as unknown as Battle) : null,
 		stats,
-		leaderboard: leaderboard.slice(0, 3),
 		recent: (recentBattles ?? []).map((b) => toSafe(b as unknown as Battle))
 	};
 };

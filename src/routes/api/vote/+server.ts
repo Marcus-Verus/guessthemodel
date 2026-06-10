@@ -1,17 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { supabase } from '$lib/server/supabase';
-import { getVoteStats, generateInsight } from '$lib/server/stats';
-import type { ModelName, Battle } from '$lib/types';
-
-function modelIdToName(modelId: string): ModelName {
-	if (modelId.startsWith('anthropic/')) return 'claude';
-	if (modelId.startsWith('openai/')) return 'chatgpt';
-	if (modelId.startsWith('google/')) return 'gemini';
-	if (modelId.startsWith('x-ai/')) return 'grok';
-	if (modelId.startsWith('perplexity/')) return 'perplexity';
-	return 'claude';
-}
+import { getVoteStats, generateInsight, modelIdToName } from '$lib/server/stats';
+import type { Battle } from '$lib/types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
