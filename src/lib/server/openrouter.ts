@@ -9,6 +9,13 @@ export const OPENROUTER_MODELS: Record<ModelName, string> = {
 	perplexity: 'perplexity/llama-3.1-sonar-large-128k-online'
 };
 
+/** The fixed three models used in every battle */
+const BATTLE_MODEL_ENTRIES: [ModelName, string][] = [
+	['claude', OPENROUTER_MODELS.claude],
+	['chatgpt', OPENROUTER_MODELS.chatgpt],
+	['gemini', OPENROUTER_MODELS.gemini]
+];
+
 const SYSTEM_PROMPT =
 	"You are a helpful assistant. Answer the user's prompt directly and concisely. Do not introduce yourself or mention your name.";
 
@@ -41,13 +48,14 @@ async function callModel(modelId: string, prompt: string): Promise<string> {
 	return data.choices[0]?.message?.content ?? '';
 }
 
-export async function generateAllOutputs(
-	prompt: string
-): Promise<Record<ModelName, { text: string; model_id: string }>> {
-	const entries = Object.entries(OPENROUTER_MODELS) as [ModelName, string][];
-
+/** Call all three battle models in parallel */
+export async function generateBattleOutputs(prompt: string): Promise<{
+	claude: { text: string; model_id: string };
+	chatgpt: { text: string; model_id: string };
+	gemini: { text: string; model_id: string };
+}> {
 	const results = await Promise.allSettled(
-		entries.map(async ([name, modelId]) => ({
+		BATTLE_MODEL_ENTRIES.map(async ([name, modelId]) => ({
 			name,
 			modelId,
 			text: await callModel(modelId, prompt)
@@ -65,34 +73,15 @@ export async function generateAllOutputs(
 		}
 	}
 
-	return outputs as Record<ModelName, { text: string; model_id: string }>;
-}
-
-/** Pick 2 models randomly for the A/B battle */
-export function pickTwoForBattle(
-	allOutputs: Partial<Record<ModelName, { text: string; model_id: string }>>
-): {
-	modelA: { text: string; model_id: string; name: ModelName };
-	modelB: { text: string; model_id: string; name: ModelName };
-} {
-	const available = Object.entries(allOutputs).filter(([, v]) => v && v.text) as [
-		ModelName,
-		{ text: string; model_id: string }
-	][];
-
-	if (available.length < 2) {
-		throw new Error('Need at least 2 successful model outputs to create a battle');
+	for (const [name] of BATTLE_MODEL_ENTRIES) {
+		if (!outputs[name]?.text) {
+			throw new Error(`Model ${name} failed to generate output`);
+		}
 	}
 
-	// Fisher-Yates shuffle, pick first 2
-	for (let i = available.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		[available[i], available[j]] = [available[j], available[i]];
-	}
-
-	const [a, b] = available;
 	return {
-		modelA: { ...a[1], name: a[0] },
-		modelB: { ...b[1], name: b[0] }
+		claude: outputs.claude!,
+		chatgpt: outputs.chatgpt!,
+		gemini: outputs.gemini!
 	};
 }

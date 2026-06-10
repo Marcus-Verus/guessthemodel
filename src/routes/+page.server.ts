@@ -28,7 +28,8 @@ export const load: PageServerLoad = async () => {
 			...battle,
 			outputs: {
 				modelA: { text: battle.outputs.modelA.text },
-				modelB: { text: battle.outputs.modelB.text }
+				modelB: { text: battle.outputs.modelB.text },
+				modelC: { text: battle.outputs.modelC.text }
 			}
 		};
 	}
@@ -40,7 +41,7 @@ export const load: PageServerLoad = async () => {
 		meta: {
 			title: `${SITE_NAME} — Can You Tell Which AI Wrote This?`,
 			description:
-				'Vote blind on real AI outputs. Guess which model wrote it — ChatGPT, Claude, Gemini, Grok or Perplexity. See the crowd results and test your AI intuition.',
+				'Vote blind on real AI outputs. Guess which model wrote it — Claude, ChatGPT or Gemini. See the crowd results and find out if you can tell the difference.',
 			canonical: SITE_URL,
 			ogImage: OG_IMAGE
 		}

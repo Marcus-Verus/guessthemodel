@@ -29,7 +29,8 @@ export const load: PageServerLoad = async ({ params, url }) => {
 			...battle,
 			outputs: {
 				modelA: { text: battle.outputs.modelA.text },
-				modelB: { text: battle.outputs.modelB.text }
+				modelB: { text: battle.outputs.modelB.text },
+				modelC: { text: battle.outputs.modelC.text }
 			}
 		};
 	});
@@ -42,7 +43,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		pageSize,
 		meta: {
 			title: `Best ${CATEGORY_LABELS[category]} AI? Blind Human Votes | ${SITE_NAME}`,
-			description: `Which AI wins blind ${CATEGORY_LABELS[category]} battles? Real human votes with no model names shown. ChatGPT vs Claude vs Gemini vs Grok vs Perplexity — who wins?`,
+			description: `Which AI wins blind ${CATEGORY_LABELS[category]} battles? Real human votes with no model names shown. Claude vs ChatGPT vs Gemini — who wins?`,
 			canonical: `${SITE_URL}/${category}`,
 			ogImage: OG_IMAGE
 		}

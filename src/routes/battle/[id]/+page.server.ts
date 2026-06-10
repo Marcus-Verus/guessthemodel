@@ -22,7 +22,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		...b,
 		outputs: {
 			modelA: { text: b.outputs.modelA.text },
-			modelB: { text: b.outputs.modelB.text }
+			modelB: { text: b.outputs.modelB.text },
+			modelC: { text: b.outputs.modelC.text }
 		}
 	};
 
