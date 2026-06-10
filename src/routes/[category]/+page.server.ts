@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import { supabase } from '$lib/server/supabase';
 import type { Battle, SafeBattle, Category } from '$lib/types';
 import { CATEGORIES, CATEGORY_LABELS } from '$lib/types';
+import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
 
 export const load: PageServerLoad = async ({ params, url }) => {
 	const category = params.category as Category;
@@ -40,8 +41,10 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		page,
 		pageSize,
 		meta: {
-			title: `Best AI for ${CATEGORY_LABELS[category]} — ${count ?? 0} human votes | GuessTheModel`,
-			description: `Which AI model writes the best ${CATEGORY_LABELS[category]} content? ${count ?? 0} blind human votes across ${safeBattles.length} battles. See the results at guessthemodel.com`
+			title: `Best ${CATEGORY_LABELS[category]} AI? Blind Human Votes | ${SITE_NAME}`,
+			description: `Which AI wins blind ${CATEGORY_LABELS[category]} battles? Real human votes with no model names shown. ChatGPT vs Claude vs Gemini vs Grok vs Perplexity — who wins?`,
+			canonical: `${SITE_URL}/${category}`,
+			ogImage: OG_IMAGE
 		}
 	};
 };
