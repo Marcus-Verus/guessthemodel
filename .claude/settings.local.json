@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"c:\\\\Users\\\\mverhill\\\\Documents\\\\guess\" 2>&1; echo \"---\"; ls \"c:\\\\Users\\\\mverhill\\\\Documents\\\\\" 2>&1)",
+      "Read(//c/Users/mverhill/**)"
+    ]
+  }
+}
