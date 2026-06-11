@@ -101,6 +101,9 @@
 	let voteHistory = $state<VoteHistoryEntry[]>([]);
 	let streak = $state(0);
 	let titles = $state<string[]>([]);
+	let emailInput = $state('');
+	let emailSubmitted = $state(false);
+	let emailLoading = $state(false);
 
 	const stepIndex = $derived(STEPS.indexOf(step));
 
@@ -278,7 +281,7 @@
 
 	async function copyShareText() {
 		if (!revealData) return;
-		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, your_choice } =
+		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, your_choice, model_guess_correct } =
 			revealData;
 
 		let pickedLabel: string;
@@ -300,8 +303,22 @@
 		];
 		const parts = allParts.filter((p) => p.v > 0).map((p) => `${p.label} ${p.v}%`);
 
-		const guessLine = modelGuess ? ` Guessed ${guessLabel}.` : '';
-		const text = `I picked ${pickedLabel}.${guessLine} ${beat}% of voters agreed.\n[${parts.join(' · ')}]\nguessthemodel.com/battle/${battle.id}`;
+		const promptSnippet = battle.prompt.length > 60
+			? battle.prompt.slice(0, 60).trimEnd() + '…'
+			: battle.prompt;
+
+		let firstLine: string;
+		if (your_choice === 'all_bad') {
+			firstLine = `I said all 5 AIs were bad on this one 💀 ${beat}% agreed.`;
+		} else if (model_guess_correct === true) {
+			firstLine = `I correctly spotted ${pickedLabel} out of 5 AIs with no names shown 🎯 ${beat}% of voters picked the same.`;
+		} else if (model_guess_correct === false && modelGuess) {
+			firstLine = `I was convinced that was ${guessLabel}. It was ${pickedLabel} 😅 ${beat}% of voters picked the same.`;
+		} else {
+			firstLine = `I picked ${pickedLabel} as the best AI response — ${beat}% of voters agreed.`;
+		}
+
+		const text = `${firstLine}\n"${promptSnippet}"\n[${parts.join(' · ')}]\nguessthemodel.com/battle/${battle.id}`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
@@ -322,6 +339,25 @@
 
 	function needsTruncation(text: string): boolean {
 		return text.length > 350 || text.split('\n').length > 6;
+	}
+
+	async function handleEmailSubmit(e: Event) {
+		e.preventDefault();
+		if (!emailInput.includes('@')) return;
+		emailLoading = true;
+		try {
+			await fetch('/api/subscribe', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: emailInput })
+			});
+			emailSubmitted = true;
+			localStorage.setItem('gtm_subscribed', '1');
+		} catch {
+			// silent fail — don't block the user
+		} finally {
+			emailLoading = false;
+		}
 	}
 
 	function sharePartsStr(): string {
@@ -540,6 +576,22 @@
 				<p class="text-[#6E7681] text-xs mt-3">{stats.total} vote{stats.total !== 1 ? 's' : ''}</p>
 			</div>
 
+			<!-- Wrong/right guess callout -->
+			{#if modelGuess && model_guess_correct === false && choice !== 'all_bad'}
+				<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-4 text-sm">
+					<span class="text-[#8B949E]">You thought that was </span>
+					<span class="text-white font-medium">{MODEL_LABELS[modelGuess]}</span>
+					<span class="text-[#8B949E]">. It was </span>
+					<span class="text-white font-medium">{choice ? MODEL_LABELS[getModelName(choice)] : ''}</span>
+					<span class="text-[#8B949E]">. Nobody said this would be easy.</span>
+				</div>
+			{:else if model_guess_correct === true && choice !== 'all_bad'}
+				<div class="rounded-lg bg-[#C3F73A10] border border-[#C3F73A30] px-4 py-3 mb-4 text-sm">
+					<span class="text-[#C3F73A] font-medium">You nailed it — that was {choice ? MODEL_LABELS[getModelName(choice)] : ''}.</span>
+					<span class="text-[#8B949E]"> Model Sniper energy.</span>
+				</div>
+			{/if}
+
 			<!-- Scores -->
 			<div class="flex flex-wrap gap-3 mb-4">
 				{#if model_guess_correct !== null}
@@ -600,6 +652,31 @@
 					{copied ? 'Copied' : 'Copy result'}
 				</button>
 			</div>
+
+			<!-- Email capture -->
+			{#if !emailSubmitted && !localStorage.getItem('gtm_subscribed')}
+					<div class="card p-4 mb-4">
+						<p class="text-white font-medium text-sm mb-0.5">Get tomorrow's battle</p>
+						<p class="text-[#6E7681] text-xs mb-3">New battle every day. One email, no spam.</p>
+						<form onsubmit={handleEmailSubmit} class="flex gap-2">
+							<input
+								type="email"
+								bind:value={emailInput}
+								placeholder="you@example.com"
+								class="flex-1 min-w-0 bg-[#0D1117] border border-[#30363D] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#6E7681] focus:border-[#C3F73A] focus:outline-none transition-colors"
+							/>
+							<button
+								type="submit"
+								disabled={emailLoading}
+								class="rounded-md bg-[#C3F73A] px-4 py-2 text-sm font-medium text-[#0D1117] hover:bg-[#D4F85C] transition-colors shrink-0 disabled:opacity-50"
+							>
+								{emailLoading ? '…' : 'Notify me'}
+							</button>
+						</form>
+					</div>
+			{:else if emailSubmitted}
+				<p class="text-[#C3F73A] text-sm mb-4">✓ You're in. Tomorrow's battle lands in your inbox.</p>
+			{/if}
 
 			<a
 				href="/"

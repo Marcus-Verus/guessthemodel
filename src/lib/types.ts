@@ -1,4 +1,4 @@
-export type Category = 'coding' | 'career' | 'writing' | 'research' | 'roast' | 'creator';
+export type Category = 'coding' | 'career' | 'writing' | 'research' | 'roast' | 'creator' | 'meta' | 'opinion';
 
 export type ModelName = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
 
@@ -40,7 +40,7 @@ export const MODEL_VERSION_LABELS: Record<string, string> = {
 	'perplexity/sonar-pro': 'Perplexity Sonar Pro'
 };
 
-export const CATEGORIES: Category[] = ['coding', 'career', 'writing', 'research', 'roast', 'creator'];
+export const CATEGORIES: Category[] = ['coding', 'career', 'writing', 'research', 'roast', 'creator', 'meta', 'opinion'];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
 	coding: 'Coding',
@@ -48,7 +48,9 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 	writing: 'Writing',
 	research: 'Research',
 	roast: 'Roast',
-	creator: 'Creator'
+	creator: 'Creator',
+	meta: 'Meta',
+	opinion: 'Opinion'
 };
 
 export interface BattleOutput {

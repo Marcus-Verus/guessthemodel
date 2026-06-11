@@ -6,6 +6,7 @@
 	import { CATEGORY_LABELS } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
+
 </script>
 
 <svelte:head>
@@ -58,6 +59,9 @@
 				<span class="text-xs px-2 py-0.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A]">
 					{CATEGORY_LABELS[data.daily.category]}
 				</span>
+				{#if data.battleNumber > 0}
+					<span class="text-xs text-[#6E7681] ml-auto">#{data.battleNumber}</span>
+				{/if}
 			</div>
 			<div class="card p-5 sm:p-6">
 				<BattleFlow battle={data.daily} />
@@ -104,5 +108,15 @@
 			{/each}
 		</div>
 	{/if}
+
+	<!-- Footer -->
+	<div class="mt-12 pt-6 border-t border-[#21262D] flex flex-wrap items-center justify-between gap-4">
+		<p class="text-[#6E7681] text-xs">The social human benchmark for AI.</p>
+		<div class="flex items-center gap-5 text-xs text-[#6E7681]">
+			<a href="/methodology" class="hover:text-[#8B949E] transition-colors">Methodology</a>
+			<a href="/press" class="hover:text-[#8B949E] transition-colors">Press</a>
+			<a href="/faq" class="hover:text-[#8B949E] transition-colors">FAQ</a>
+		</div>
+	</div>
 
 </div>
