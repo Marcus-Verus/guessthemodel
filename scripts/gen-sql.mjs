@@ -1,0 +1,78 @@
+// Generates supabase/seed.sql from static battle data — run with: node scripts/gen-sql.mjs
+import { writeFileSync } from 'fs';
+
+const MODEL_IDS = {
+  claude:  'anthropic/claude-sonnet-4-5',
+  chatgpt: 'openai/gpt-4o',
+  gemini:  'google/gemini-pro-1.5',
+};
+
+const BATTLES = [
+  { daysAgo: 0, category: 'coding', prompt: 'Write a debounce function from scratch in JavaScript.',
+    claude:  `function debounce(fn, delay) {\n  let timer;\n  return function (...args) {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn.apply(this, args), delay);\n  };\n}\n\nconst handleSearch = debounce((query) => {\n  console.log('Searching for:', query);\n}, 300);\n\ndebounce wraps a function so it only fires after the specified delay since the last call. Each new call resets the timer, so rapid-fire invocations only trigger the function once the user pauses.`,
+    chatgpt: `function debounce(func, wait) {\n  let timeout;\n  return function executedFunction(...args) {\n    const later = () => { clearTimeout(timeout); func(...args); };\n    clearTimeout(timeout);\n    timeout = setTimeout(later, wait);\n  };\n}\n\nHow it works:\n1. Returns a wrapper that clears any pending timer on every call\n2. Sets a new timer for wait milliseconds\n3. Only when the timer completes does it invoke the original function\n\nExample:\nconst debouncedSearch = debounce(searchAPI, 500);\ninput.addEventListener('input', (e) => debouncedSearch(e.target.value));`,
+    gemini:  `function debounce(func, delay) {\n  let timeoutId;\n  return function(...args) {\n    if (timeoutId) clearTimeout(timeoutId);\n    timeoutId = setTimeout(() => func.apply(this, args), delay);\n  };\n}\n\nUsage:\nconst debouncedResize = debounce(() => console.log('resized!'), 250);\nwindow.addEventListener('resize', debouncedResize);\n\nThe key insight is that timeoutId lives in the closure — each call cancels the previous timer and starts fresh.`,
+  },
+  { daysAgo: 1, category: 'career', prompt: "How should I ask for a raise when I know I'm underpaid by 20%?",
+    claude:  `Start by building your case before the conversation. Document your contributions — specific projects, metrics, and outcomes that show your value. Research market rates using Glassdoor, Levels.fyi, or LinkedIn Salary to back up the 20% gap with data, not just a feeling.\n\nWhen you schedule the meeting, frame it as a career conversation, not a complaint. Open with your accomplishments, then present the market data. Name the number you want — vague requests get vague answers.\n\nBe ready for pushback. If budget is the excuse, ask about a timeline: "If not now, what would need to happen for a review in 90 days?" Get any commitments in writing. If they won't move at all, you have useful information about whether to stay.`,
+    chatgpt: `Here's a strategic approach:\n\n1. Do your homework first\nGather salary data from Glassdoor, LinkedIn Salary, and Levels.fyi. Document your specific achievements and quantify them.\n\n2. Request a dedicated meeting\nDon't bring it up casually. Ask for time specifically to discuss your compensation.\n\n3. Lead with value, follow with market data\n"Over the past year, I've [accomplishments]. Based on current market rates, I believe there's a meaningful gap in my compensation."\n\n4. State a specific number — vague requests get vague answers.\n\n5. Prepare for objections\n"Budget is tight" → Ask about a concrete timeline.\nIf they can't close the gap, that's valuable information about whether to stay.`,
+    gemini:  `Asking for a raise when you're underpaid requires preparation and confidence.\n\nPrepare your case:\n- Gather market data showing the 20% gap (Glassdoor, LinkedIn Salary, industry reports)\n- List your key accomplishments with measurable impact\n- Time it well — after a recent win or during review cycles\n\nThe conversation:\nSchedule a formal meeting. Open by expressing commitment to the role, then: "I've researched market rates and there's a significant gap. I'd like to discuss bringing my salary to [specific number]."\n\nIf they say no, ask what needs to change and request a concrete timeline in writing.`,
+  },
+  { daysAgo: 2, category: 'writing', prompt: 'Write a breakup text that is honest but genuinely kind.',
+    claude:  `Hey. I've been sitting with this for a while, and I owe you honesty rather than more silence. I don't think we're right for each other long-term, and I'd rather tell you that clearly than let things drift. What we had was real, and you're someone I genuinely care about — that's exactly why I don't want to string you along. I'm sorry for how much this hurts. You deserve someone who's all in, and I want that for you.`,
+    chatgpt: `Hey [Name], I've been thinking a lot, and I want to be honest with you because you deserve that. I don't think we're in the right place to keep building something together, and I know that's hard to hear. This isn't about you doing anything wrong — you've been kind and genuine, and I mean that. I just don't feel the connection we'd both need for this to work long-term.\n\nI'm really grateful for the time we spent together. I'm sorry for the hurt this causes. Wishing you genuinely good things.`,
+    gemini:  `Hey, I've been thinking a lot about us, and I want to be honest with you because you deserve that.\n\nI don't think this relationship is working for me, and I don't want to keep going and end up hurting you more down the line. You're a genuinely good person — this isn't about anything you did wrong.\n\nI care about you, which is why I'm telling you directly instead of pulling away. I'm sorry for the pain this causes. I hope you give yourself space to feel whatever you need to feel, and that things get easier for you soon.`,
+  },
+  { daysAgo: 3, category: 'research', prompt: 'What are the main arguments for and against a 4-day work week?',
+    claude:  `For:\n- Productivity holds or improves. Trials in Iceland, the UK, and Japan found output stayed the same or increased — focused work time sharpens when scarce.\n- Employee wellbeing. Reduced burnout, better mental health, lower absenteeism, stronger retention.\n- Environmental spillovers. Fewer commuting days lowers emissions.\n\nAgainst:\n- Doesn't fit all industries. Healthcare, retail, and manufacturing can't easily compress schedules without coverage gaps.\n- Hidden intensity. Four days can mean cramming five days of stress into fewer hours.\n- Coordination friction. Global teams on different schedules create real gaps.\n- Uneven benefits. Salary workers gain most; hourly workers may just see fewer hours and less pay.\n\nThe strongest counterargument isn't that productivity drops — the evidence doesn't support that — but that it benefits some sectors far more than others.`,
+    chatgpt: `Arguments For:\n\nProductivity — Research shows output often stays the same or improves (Microsoft Japan saw 40% gains). Less time creates more focus.\n\nEmployee wellbeing — Reduced burnout, better work-life balance, lower turnover.\n\nBusiness advantages — Lower overhead, competitive recruiting edge.\n\nArguments Against:\n\nOperational challenges — Healthcare, manufacturing, and customer service need 5-7 day coverage. Coordinating with clients on different schedules is complex.\n\nPotential downsides — Work may get compressed, not reduced. Could widen white-collar vs. blue-collar gaps.\n\nBottom line: Evidence from trials is mostly positive, but universal implementation faces real structural barriers.`,
+    gemini:  `The 4-day work week debate has strong arguments on both sides.\n\nIn favor:\n1. Maintained or improved productivity — Pilots in Iceland, the UK, and Japan showed most companies held output steady.\n2. Better employee wellbeing — Lower stress, reduced burnout, higher retention.\n3. Environmental benefits — Fewer commuting days reduce carbon emissions.\n4. Talent attraction — Companies offering 4-day weeks gain a recruiting advantage.\n\nAgainst:\n1. Not universally applicable — Healthcare, retail, and emergency services can't easily adopt compressed schedules.\n2. Work compression — Same workload in fewer days can mean longer, more intense days.\n3. Coordination challenges — Global teams on 5-day schedules create friction.\n4. Unequal impact — Benefits skew toward knowledge workers.\n\nSuccessful implementation requires careful adaptation to industry and role type.`,
+  },
+  { daysAgo: 4, category: 'roast', prompt: 'Roast someone who only drinks specialty coffee and never shuts up about it.',
+    claude:  `Ah yes, the person who turned a hot drink into a personality disorder. You spent $18 on a "naturally processed Ethiopian Yirgacheffe with notes of blueberry and jasmine" — which tastes exactly like burnt water, but you insist that's because my palate is "undeveloped."\n\nYou carry a ceramic travel cup to signal that plastic is beneath you, then spend 40 minutes describing your pour-over ratio to anyone who makes the mistake of asking how your morning is going. Your coffee guy has a name. You know his farm's elevation.\n\nThe rest of us just want caffeine and for you to please, for five consecutive minutes, talk about literally anything else.`,
+    chatgpt: `Ah, the specialty coffee person. The one who looked at humanity's greatest invention and thought: this needs to be a whole thing.\n\nYou don't drink coffee. You curate it. You have a grinder that costs more than most people's rent, you describe flavor notes like you're testifying at a wine trial, and you've used the phrase "single origin" more times than you've said "I love you."\n\nYour coffee order isn't a drink — it's a TED Talk with a receipt. You've ruined every diner breakfast by quietly judging the coffee while loudly saying nothing.\n\nThe worst part? You're not even more caffeinated than anyone else. You're just like this naturally.`,
+    gemini:  `Let's talk about the person who discovered that coffee could be a moral failing and ran with it.\n\nYou've never just had a coffee. You've had a "lightly washed Kenyan processed at 1,900 meters with stone fruit on the finish." You bring your own beans to other people's houses. You've said the word "terroir" unironically in casual conversation. Twice.\n\nYour coffee journey has a chapter where you bought a $300 scale to weigh water. You look at a Starbucks the way a sommelier looks at a juice box.\n\nThe funniest part is that you're always tired. With all that artisanal excellence — you're still exhausted by 2pm. Maybe the Folgers crowd is onto something.`,
+  },
+  { daysAgo: 5, category: 'creator', prompt: 'Write a 30-second sponsored segment script for a VPN in a tech video.',
+    claude:  `"Before we get into it — quick word from today's sponsor, NordVPN. If you're using public WiFi at airports, cafes, or hotels, your traffic is visible to anyone on that network. NordVPN encrypts your connection so it isn't. It also lets you browse as if you're in a different country, which is useful if you travel or want access to region-locked content. One subscription covers six devices. There's a 30-day money-back guarantee, so it's zero risk to try. Link in the description, and the code gets you an extra three months free. Alright, back to the video."`,
+    chatgpt: `"This video is sponsored by ExpressVPN. When you're on public WiFi — at a coffee shop, airport, or hotel — your data is exposed to anyone on that network. ExpressVPN encrypts your entire connection in one tap, keeping your browsing, passwords, and personal info private. It also lets you access content from over 90 countries, which is great if you travel or want to unlock streaming libraries not available in your region. Works on all your devices, and they offer a 30-day money-back guarantee. Use the link in the description to get three extra months free with an annual plan. Now, back to what we were talking about."`,
+    gemini:  `[Upbeat but natural tone]\n\n"Hey, quick break — this video is brought to you by Surfshark. Here's the thing about browsing without a VPN: your ISP can see everything you do online, and on public WiFi, so can anyone else on the network. Surfshark encrypts your connection and masks your IP so you're actually private — not just incognito-tab private. It unblocks streaming content from other regions and comes with unlimited simultaneous device connections, so your whole household is covered. Get Surfshark at a big discount with the link below, and there's a 30-day money-back guarantee. Alright, back to the video."`,
+  },
+  { daysAgo: 6, category: 'coding', prompt: 'Explain what a closure is in JavaScript with a practical example.',
+    claude:  `A closure is a function that retains access to variables from its outer scope even after that outer function has finished executing.\n\nfunction makeCounter() {\n  let count = 0;\n  return function () {\n    count++;\n    return count;\n  };\n}\n\nconst counter = makeCounter();\nconsole.log(counter()); // 1\nconsole.log(counter()); // 2\nconsole.log(counter()); // 3\n\nmakeCounter runs once and returns the inner function. The returned function closes over count, keeping it alive in memory. This is useful for private state, memoization, and factory functions.`,
+    chatgpt: `A closure is a function that "remembers" variables from its outer scope, even after that scope has finished executing.\n\nfunction createGreeter(greeting) {\n  return function(name) {\n    console.log(greeting + ', ' + name + '!');\n  };\n}\n\nconst sayHello = createGreeter('Hello');\nconst sayHi = createGreeter('Hi');\n\nsayHello('Alice'); // "Hello, Alice!"\nsayHi('Bob');      // "Hi, Bob!"\n\ncreateGreeter runs and returns a function that closes over the greeting variable. Even though createGreeter has finished, greeting persists. Closures are fundamental to React hooks, module patterns, and callbacks.`,
+    gemini:  `A closure occurs when an inner function retains access to variables from its outer function's scope, even after the outer function has returned.\n\nfunction createIdGenerator() {\n  let lastId = 0;\n  return function generateId() {\n    lastId += 1;\n    return lastId;\n  };\n}\n\nconst generateUserId = createIdGenerator();\nconst generateOrderId = createIdGenerator();\n\nconsole.log(generateUserId());  // 1\nconsole.log(generateUserId());  // 2\nconsole.log(generateOrderId()); // 1 — separate counter\n\nEach call to createIdGenerator() creates its own lastId. The returned function closes over that variable, keeping it private. Foundation of memoization, currying, and the module pattern.`,
+  },
+];
+
+function dateStr(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function esc(s) { return s.replace(/'/g, "''"); }
+
+const lines = [
+  '-- GuessTheModel seed data',
+  '-- Generated: ' + new Date().toISOString(),
+  '-- Paste into: Supabase dashboard → SQL editor → Run',
+  '',
+];
+
+for (const b of BATTLES) {
+  const bd = dateStr(b.daysAgo);
+  const outputs = JSON.stringify({
+    modelA: { text: b.claude,  model_id: MODEL_IDS.claude  },
+    modelB: { text: b.chatgpt, model_id: MODEL_IDS.chatgpt },
+    modelC: { text: b.gemini,  model_id: MODEL_IDS.gemini  },
+  });
+  lines.push(`-- ${bd} · ${b.category}`);
+  lines.push(`INSERT INTO battles (prompt, category, outputs, is_daily, battle_date)`);
+  lines.push(`SELECT '${esc(b.prompt)}', '${b.category}', '${esc(outputs)}'::jsonb, true, '${bd}'`);
+  lines.push(`WHERE NOT EXISTS (SELECT 1 FROM battles WHERE is_daily = true AND battle_date = '${bd}');`);
+  lines.push('');
+}
+
+writeFileSync('supabase/seed.sql', lines.join('\n'));
+console.log('Written to supabase/seed.sql');
