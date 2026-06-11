@@ -1,13 +1,13 @@
 import type { PageServerLoad } from './$types';
 import { supabase } from '$lib/server/supabase';
-import { getGlobalStats } from '$lib/server/stats';
+import { getGlobalStats, getModelStandings } from '$lib/server/stats';
 import type { SafeBattle, Battle } from '$lib/types';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
 
 export const load: PageServerLoad = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 
-	const [{ data: dailyBattle }, stats, { data: recentBattles }, { count: battleCount }] = await Promise.all([
+	const [{ data: dailyBattle }, stats, standings, { data: recentBattles }, { count: battleCount }] = await Promise.all([
 		supabase
 			.from('battles')
 			.select('*')
@@ -16,6 +16,7 @@ export const load: PageServerLoad = async () => {
 			.limit(1)
 			.maybeSingle(),
 		getGlobalStats(),
+		getModelStandings(),
 		supabase
 			.from('battles')
 			.select('*')
@@ -45,6 +46,7 @@ export const load: PageServerLoad = async () => {
 		daily: dailyBattle ? toSafe(dailyBattle as unknown as Battle) : null,
 		battleNumber: battleCount ?? 0,
 		stats,
+		standings,
 		recent: (recentBattles ?? []).map((b) => toSafe(b as unknown as Battle)),
 		meta: {
 			title: `${SITE_NAME} — Can You Tell Which AI Wrote This?`,

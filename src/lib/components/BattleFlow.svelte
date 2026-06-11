@@ -51,17 +51,17 @@
 		const allBad = history.filter((v) => v.choice === 'all_bad');
 
 		if (history.filter((v) => v.model_guess_correct === true).length >= 10)
-			titles.push('🎯 Model Sniper');
+			titles.push('Model Sniper');
 
 		if (history.filter((v) => v.crowd_prediction_correct === true).length >= 7)
-			titles.push('🔮 Crowd Reader');
+			titles.push('Crowd Reader');
 
 		if (real.length >= 10) {
 			const last10 = real.slice(-10).map((v) => v.picked_model).filter(Boolean);
-			if (new Set(last10).size >= 4) titles.push('⚡ Bias Breaker');
+			if (new Set(last10).size >= 4) titles.push('Bias Breaker');
 		}
 
-		if (allBad.length >= 5) titles.push('💀 All Bad Champion');
+		if (allBad.length >= 5) titles.push('All Bad Champion');
 
 		if (real.length >= 10) {
 			const counts: Record<string, number> = {};
@@ -71,11 +71,11 @@
 			const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
 			if (top && top[1] / real.length >= 0.7) {
 				const loyalist: Record<string, string> = {
-					claude: '👑 Claude Loyalist',
-					chatgpt: '👑 ChatGPT Loyalist',
-					gemini: '👑 Gemini Loyalist',
-					grok: '👑 Grok Loyalist',
-					perplexity: '👑 Perplexity Loyalist'
+					claude: 'Claude Loyalist',
+					chatgpt: 'ChatGPT Loyalist',
+					gemini: 'Gemini Loyalist',
+					grok: 'Grok Loyalist',
+					perplexity: 'Perplexity Loyalist'
 				};
 				if (loyalist[top[0]]) titles.push(loyalist[top[0]]);
 			}
@@ -305,8 +305,8 @@
 		return pct(counts[your_choice] ?? 0, stats.total);
 	}
 
-	function getScore(): { score: number; emojis: string; pickedWinner: boolean } {
-		if (!revealData) return { score: 0, emojis: '⬜⬜⬜', pickedWinner: false };
+	function getScore(): { score: number; result: (boolean | null)[]; pickedWinner: boolean } {
+		if (!revealData) return { score: 0, result: [null, null, null], pickedWinner: false };
 		const { stats, model_guess_correct, crowd_prediction_correct, your_choice } = revealData;
 		let score = 0;
 		let pickedWinner = false;
@@ -323,15 +323,14 @@
 			pickedWinner = tiedCount === 1 && counts[your_choice] === maxV;
 		}
 		if (pickedWinner) score++;
-		const e1 = pickedWinner ? '🟩' : '🟥';
-
-		const e2 = model_guess_correct === null ? '⬜' : (model_guess_correct ? '🟩' : '🟥');
 		if (model_guess_correct === true) score++;
-
-		const e3 = crowd_prediction_correct === null ? '⬜' : (crowd_prediction_correct ? '🟩' : '🟥');
 		if (crowd_prediction_correct === true) score++;
 
-		return { score, emojis: `${e1}${e2}${e3}`, pickedWinner };
+		return {
+			score,
+			result: [pickedWinner, model_guess_correct, crowd_prediction_correct],
+			pickedWinner
+		};
 	}
 
 	const scoreData = $derived(getScore());
@@ -339,7 +338,7 @@
 	async function copyShareText() {
 		if (!revealData) return;
 		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name } = revealData;
-		const { score, emojis } = scoreData;
+		const { score } = scoreData;
 
 		const allParts = [
 			{ label: MODEL_LABELS[model_A_name], v: pct(stats.A, stats.total) },
@@ -354,7 +353,7 @@
 			? battle.prompt.slice(0, 55).trimEnd() + '…'
 			: battle.prompt;
 
-		const text = `GuessTheModel 🤖\n${emojis} ${score}/3\n\n"${promptSnippet}"\n${parts.join(' · ')}\nguessthemodel.com/battle/${battle.id}`;
+		const text = `GuessTheModel — ${score}/3\n"${promptSnippet}"\n${parts.join(' · ')}\nguessthemodel.com/battle/${battle.id}`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
@@ -581,9 +580,13 @@
 			{@const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
 			{@const maxVotes = Math.max(stats.A, stats.B, stats.C, stats.D ?? 0, stats.E ?? 0)}
 
-			<!-- Score card — Wordle-style, most prominent element -->
+			<!-- Score card -->
 			<div class="card p-5 mb-5 text-center bg-[#161B22] border-[#C3F73A20]">
-				<div class="text-4xl mb-2 tracking-widest leading-none">{scoreData.emojis}</div>
+				<div class="flex items-center justify-center gap-2.5 mb-3">
+					{#each scoreData.result as r}
+						<div class="h-8 w-8 rounded-md {r === null ? 'bg-[#21262D] border border-[#30363D]' : r ? 'bg-[#C3F73A]' : 'bg-[#F85149]'}"></div>
+					{/each}
+				</div>
 				<div class="text-white font-bold text-2xl mb-1">
 					{scoreData.score}<span class="text-[#6E7681] font-normal">/3</span>
 				</div>
@@ -697,8 +700,7 @@
 			<div class="card p-4 mb-4 bg-[#21262D]">
 				<p class="label mb-3">Share your result</p>
 				<div class="font-mono text-sm text-[#C3F73A] leading-relaxed bg-[#0D1117] rounded-md px-4 py-3 border border-[#30363D]">
-					<span class="text-white">GuessTheModel</span> 🤖<br />
-					{scoreData.emojis} {scoreData.score}/3<br />
+					<span class="text-white">GuessTheModel</span> — {scoreData.score}/3<br />
 					<br />
 					<span class="text-[#8B949E]">"{battle.prompt.length > 55 ? battle.prompt.slice(0, 55).trimEnd() + '…' : battle.prompt}"</span><br />
 					{sharePartsStr()}<br />

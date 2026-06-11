@@ -4,6 +4,7 @@
 	import CategoryNav from '$lib/components/CategoryNav.svelte';
 	import StatsRow from '$lib/components/StatsRow.svelte';
 	import StreakBadge from '$lib/components/StreakBadge.svelte';
+	import ModelStandings from '$lib/components/ModelStandings.svelte';
 	import { CATEGORY_LABELS } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
@@ -35,24 +36,21 @@
 
 	<!-- Hero -->
 	<div class="mb-10">
-		<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#C3F73A30] bg-[#C3F73A08] mb-4">
-			<span class="h-1.5 w-1.5 rounded-full bg-[#C3F73A]"></span>
-			<span class="text-[#C3F73A] text-xs font-medium tracking-wide uppercase">Social human benchmark</span>
-		</div>
 		<h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight mb-3">
 			Can you tell which <em class="text-[#C3F73A] not-italic">AI wrote this?</em>
 		</h1>
-		<p class="text-[#8B949E] text-base max-w-xl">
-			5 models. Same prompt. No names. Real humans vote blind — the only AI benchmark brands can't game.
+		<p class="text-[#8B949E] text-base">
+			5 models. Same prompt. No names. Vote blind.
 		</p>
 	</div>
 
 	<!-- Personal streak (client-only, reads localStorage) -->
 	<StreakBadge />
 
-	<!-- Stats -->
-	<div class="mb-10">
+	<!-- Stats + Benchmark -->
+	<div class="mb-10 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
 		<StatsRow stats={data.stats} />
+		<ModelStandings rows={data.standings} totalBattles={data.stats.battles_run} />
 	</div>
 
 	<!-- Today's battle -->

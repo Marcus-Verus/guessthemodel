@@ -31,7 +31,7 @@
 	<div class="flex flex-wrap items-center gap-3 mb-6">
 		{#if streak >= 2}
 			<div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A] text-xs font-medium">
-				🔥 {streak}-day streak
+				{streak}-day streak
 				{#if streak >= 7} · week strong{/if}
 				{#if streak >= 30} · legendary{/if}
 			</div>
