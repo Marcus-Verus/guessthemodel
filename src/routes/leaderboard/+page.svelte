@@ -35,16 +35,16 @@
 		<!-- Table -->
 		<div class="card overflow-hidden">
 			<!-- Header -->
-			<div class="grid grid-cols-[2rem_1fr_7rem_7rem_7rem] gap-3 px-5 py-3 border-b border-[#30363D] text-xs text-[#6E7681] font-medium uppercase tracking-wide">
+			<div class="grid grid-cols-[2rem_1fr_7rem_7rem] sm:grid-cols-[2rem_1fr_7rem_7rem_7rem] gap-3 px-5 py-3 border-b border-[#30363D] text-xs text-[#6E7681] font-medium uppercase tracking-wide">
 				<span>#</span>
 				<span>Model</span>
 				<span class="text-right">Win rate</span>
 				<span class="text-right">Wins</span>
-				<span class="text-right">Vote share</span>
+				<span class="text-right hidden sm:block">Vote share</span>
 			</div>
 
 			{#each data.rows as row, i}
-				<div class="grid grid-cols-[2rem_1fr_7rem_7rem_7rem] gap-3 px-5 py-4 border-b border-[#30363D] last:border-0 items-center">
+				<div class="grid grid-cols-[2rem_1fr_7rem_7rem] sm:grid-cols-[2rem_1fr_7rem_7rem_7rem] gap-3 px-5 py-4 border-b border-[#30363D] last:border-0 items-center">
 					<!-- Rank -->
 					<span class="text-[#6E7681] text-sm tabular-nums">{i + 1}</span>
 
@@ -54,12 +54,12 @@
 							class="h-2.5 w-2.5 rounded-full shrink-0"
 							style="background:{MODEL_COLORS[row.model]}"
 						></div>
-						<span class="text-white font-medium text-sm">{row.label}</span>
+						<span class="text-white font-medium text-sm truncate">{row.label}</span>
 					</div>
 
 					<!-- Win rate bar + % -->
 					<div class="flex items-center gap-2 justify-end">
-						<div class="w-14 h-1.5 bg-[#21262D] rounded-full overflow-hidden">
+						<div class="w-10 sm:w-14 h-1.5 bg-[#21262D] rounded-full overflow-hidden">
 							<div
 								class="h-full rounded-full bg-[#C3F73A] transition-all duration-500"
 								style="width:{Math.round(row.winRate * 100)}%"
@@ -73,8 +73,8 @@
 						{row.wins}<span class="text-[#6E7681]">/{row.battles}</span>
 					</span>
 
-					<!-- Vote share -->
-					<span class="text-[#8B949E] text-sm tabular-nums text-right">
+					<!-- Vote share (hidden on mobile) -->
+					<span class="text-[#8B949E] text-sm tabular-nums text-right hidden sm:block">
 						{Math.round(row.voteShare * 100)}%
 					</span>
 				</div>

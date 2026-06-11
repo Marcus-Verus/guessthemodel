@@ -291,15 +291,17 @@
 		const guessLabel = modelGuess ? MODEL_LABELS[modelGuess] : 'skipped';
 		const beat = beatPercent();
 
-		const parts = [
-			`${MODEL_LABELS[model_A_name]} ${pct(stats.A, stats.total)}%`,
-			`${MODEL_LABELS[model_B_name]} ${pct(stats.B, stats.total)}%`,
-			`${MODEL_LABELS[model_C_name]} ${pct(stats.C, stats.total)}%`,
-			...(model_D_name ? [`${MODEL_LABELS[model_D_name]} ${pct(stats.D ?? 0, stats.total)}%`] : []),
-			...(model_E_name ? [`${MODEL_LABELS[model_E_name]} ${pct(stats.E ?? 0, stats.total)}%`] : [])
+		const allParts = [
+			{ label: MODEL_LABELS[model_A_name], v: pct(stats.A, stats.total) },
+			{ label: MODEL_LABELS[model_B_name], v: pct(stats.B, stats.total) },
+			{ label: MODEL_LABELS[model_C_name], v: pct(stats.C, stats.total) },
+			...(model_D_name ? [{ label: MODEL_LABELS[model_D_name], v: pct(stats.D ?? 0, stats.total) }] : []),
+			...(model_E_name ? [{ label: MODEL_LABELS[model_E_name], v: pct(stats.E ?? 0, stats.total) }] : [])
 		];
+		const parts = allParts.filter((p) => p.v > 0).map((p) => `${p.label} ${p.v}%`);
 
-		const text = `I picked ${pickedLabel}. Thought it was ${guessLabel}. Beat ${beat}% of voters.\n[${parts.join(' · ')}]\nguessthemodel.com`;
+		const guessLine = modelGuess ? ` Guessed ${guessLabel}.` : '';
+		const text = `I picked ${pickedLabel}.${guessLine} ${beat}% of voters agreed.\n[${parts.join(' · ')}]\nguessthemodel.com/battle/${battle.id}`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
@@ -320,6 +322,18 @@
 
 	function needsTruncation(text: string): boolean {
 		return text.length > 350 || text.split('\n').length > 6;
+	}
+
+	function sharePartsStr(): string {
+		if (!revealData) return '';
+		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name } = revealData;
+		return [
+			{ label: MODEL_LABELS[model_A_name], v: pct(stats.A, stats.total) },
+			{ label: MODEL_LABELS[model_B_name], v: pct(stats.B, stats.total) },
+			{ label: MODEL_LABELS[model_C_name], v: pct(stats.C, stats.total) },
+			...(model_D_name ? [{ label: MODEL_LABELS[model_D_name], v: pct(stats.D ?? 0, stats.total) }] : []),
+			...(model_E_name ? [{ label: MODEL_LABELS[model_E_name], v: pct(stats.E ?? 0, stats.total) }] : [])
+		].filter(p => p.v > 0).map(p => `${p.label} ${p.v}%`).join(' · ');
 	}
 </script>
 
@@ -530,15 +544,15 @@
 			<div class="flex flex-wrap gap-3 mb-4">
 				{#if model_guess_correct !== null}
 					<div class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm
-						{model_guess_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#F8514915] border border-[#F85149] text-[#F85149]'}">
-						{model_guess_correct ? '✓' : '✗'}
+						{model_guess_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#30363D] border border-[#30363D] text-[#6E7681]'}">
+						{model_guess_correct ? '✓' : '—'}
 						Model guess {model_guess_correct ? 'correct' : 'wrong'}
 					</div>
 				{/if}
 				{#if crowd_prediction_correct !== null}
 					<div class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm
-						{crowd_prediction_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#F8514915] border border-[#F85149] text-[#F85149]'}">
-						{crowd_prediction_correct ? '✓' : '✗'}
+						{crowd_prediction_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#30363D] border border-[#30363D] text-[#6E7681]'}">
+						{crowd_prediction_correct ? '✓' : '—'}
 						Crowd prediction {crowd_prediction_correct ? 'correct' : 'wrong'}
 					</div>
 				{/if}
@@ -569,22 +583,14 @@
 				<p class="label mb-2">Share your result</p>
 				<div class="font-mono text-sm text-[#C3F73A] leading-relaxed">
 					{#if choice !== 'all_bad' && choice !== null}
-						I picked {MODEL_LABELS[getModelName(choice)]}.
-						Thought it was {modelGuess ? MODEL_LABELS[modelGuess] : 'unknown'}.
-						Beat {beatPercent()}% of voters.
+						I picked {MODEL_LABELS[getModelName(choice)]}.{modelGuess ? ` Guessed ${MODEL_LABELS[modelGuess]}.` : ''} {beatPercent()}% of voters agreed.
 					{:else}
-						I said all were bad. Beat {beatPercent()}% of voters.
+						I said all were bad. {beatPercent()}% of voters agreed.
 					{/if}
 					<br />
-					[{MODEL_LABELS[model_A_name]} {pct(stats.A, stats.total)}%
-					· {MODEL_LABELS[model_B_name]} {pct(stats.B, stats.total)}%
-					· {MODEL_LABELS[model_C_name]} {pct(stats.C, stats.total)}%{model_D_name
-						? ` · ${MODEL_LABELS[model_D_name]} ${pct(stats.D ?? 0, stats.total)}%`
-						: ''}{model_E_name
-						? ` · ${MODEL_LABELS[model_E_name]} ${pct(stats.E ?? 0, stats.total)}%`
-						: ''}]
+					[{sharePartsStr()}]
 					<br />
-					guessthemodel.com
+					guessthemodel.com/battle/{battle.id}
 				</div>
 				<button
 					onclick={copyShareText}
