@@ -62,7 +62,7 @@ async function callModel(modelId, prompt) {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`OpenRouter ${modelId}: ${err}`);
+    throw new Error(`OpenRouter ${modelId} [${res.status}]: ${err}`);
   }
 
   const data = await res.json();
