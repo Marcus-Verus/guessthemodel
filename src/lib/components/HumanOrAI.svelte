@@ -116,6 +116,8 @@
 			};
 			feedback = r;
 			waiting = false;
+			// game feel: a tick for right, a buzz for wrong (mobile only, no-op elsewhere)
+			navigator.vibrate?.(r.correct ? 25 : [60, 50, 60]);
 
 			setTimeout(() => {
 				results = [...results, r];

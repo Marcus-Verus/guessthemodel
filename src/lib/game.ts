@@ -87,7 +87,7 @@ export function buildShareText(opts: {
 	return lines.join('\n');
 }
 
-/** Titles for the Human-or-AI game. The insults are the share bait. */
+/** Titles for the Human-or-AI game. The insults are the share bait — every title must be instantly understood with zero explanation. */
 export function deckTitle(score: number, outOf: number): string {
 	if (outOf <= 0) return '';
 	if (score === outOf) return 'Bot Detector';
@@ -95,6 +95,7 @@ export function deckTitle(score: number, outOf: number): string {
 	const r = score / outOf;
 	if (r >= 0.8) return 'Sharp Eye';
 	if (r >= 0.6) return 'Decent Radar';
-	if (r >= 0.45) return 'Coin Flipper';
+	if (r >= 0.45) return "Could've Flipped a Coin";
+	if (r >= 0.3) return 'Easily Fooled';
 	return 'Certified NPC';
 }

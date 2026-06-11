@@ -40,7 +40,7 @@
 		},
 		{
 			q: 'What do the titles mean?',
-			a: 'Your score earns a title: 5/5 is Model Whisperer, 3/5 is Sharp Eye, 2/5 is Decent Read, 1/5 is Mostly Fooled, and 0/5 is Perfectly Fooled — which is more common than you\'d hope.'
+			a: '6/6 Bot Detector. 5/6 Sharp Eye. 4/6 Decent Radar. 3/6 Could\'ve Flipped a Coin — because 3 out of 6 is exactly what random guessing averages. 2/6 Easily Fooled. 1/6 Certified NPC. 0/6 Perfectly Backwards, which is statistically harder than getting them all right on purpose... almost.'
 		},
 		{
 			q: 'Why is this better than benchmarks?',
