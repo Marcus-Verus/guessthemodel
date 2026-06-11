@@ -48,7 +48,7 @@
 		},
 		{
 			q: 'Can I access the data for research?',
-			a: 'Aggregate results are public on the leaderboard. Individual records are anonymised (no user identity is stored, only fingerprint hashes and vote choices). For bulk exports or research access, contact us at data@guessthemodel.com.'
+			a: 'Aggregate results are public on the leaderboard. Individual records are anonymised (no user identity is stored, only fingerprint hashes and vote choices). For bulk exports or research access, contact mark@guessthemodel.com.'
 		}
 	];
 
