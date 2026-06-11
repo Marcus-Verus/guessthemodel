@@ -18,7 +18,7 @@ const BATTLE_MODEL_ENTRIES: [ModelName, string][] = [
 ];
 
 const SYSTEM_PROMPT =
-	"You are a helpful assistant. Answer the user's prompt directly and concisely. Do not introduce yourself or mention your name.";
+	'You are a helpful assistant. Answer the user\'s prompt directly. Keep your response under 80 words. Do not introduce yourself or mention your name or model version.';
 
 async function callModel(modelId: string, prompt: string): Promise<string> {
 	const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -36,7 +36,7 @@ async function callModel(modelId: string, prompt: string): Promise<string> {
 				{ role: 'user', content: prompt }
 			],
 			temperature: 0.7,
-			max_tokens: 300
+			max_tokens: 150
 		})
 	});
 
