@@ -4,7 +4,7 @@
 	const FAQ = [
 		{
 			q: 'How does it work?',
-			a: 'Each battle shows the same prompt answered by 5 AI models — no names shown. You tag every response with the model you think wrote it (each model is used exactly once), star the best answer, and lock in. The reveal shows your score out of 5, what the crowd thought, and your streak. Same puzzle for everyone, new battle daily.'
+			a: 'One prompt, five AI answers, no names. You see one answer at a time — tap which AI you think wrote it and get the answer instantly. Each AI writes exactly one answer, so every guess you burn is gone. Five rounds, score out of 5, same puzzle for everyone, new battle daily.'
 		},
 		{
 			q: 'Which AI models are included?',

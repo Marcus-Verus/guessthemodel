@@ -8,7 +8,7 @@
 CREATE TABLE IF NOT EXISTS battles (
   id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   prompt      text NOT NULL,
-  category    text NOT NULL CHECK (category IN ('coding', 'career', 'writing', 'research', 'roast', 'creator')),
+  category    text NOT NULL CHECK (category IN ('coding', 'career', 'writing', 'research', 'roast', 'creator', 'meta', 'opinion')),
   -- outputs: { modelA: { text, model_id }, modelB: { text, model_id }, modelC: { text, model_id } }
   -- Always Claude (A), ChatGPT (B), Gemini (C). model names are only exposed server-side.
   outputs     jsonb NOT NULL,

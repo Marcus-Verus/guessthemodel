@@ -26,10 +26,28 @@
       "PowerShell($body = @{ battle_id = '75cf873a-1fc2-4afb-814a-4b9a01ae3c33'; fingerprint = 'claude-e2e-test-delete-me-2'; favorite = 'B'; guesses = @{ A='grok'; B='chatgpt'; C='claude'; D='perplexity'; E='gemini' } } | ConvertTo-Json; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/vote' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content)",
       "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; Invoke-RestMethod -Uri \"$url/rest/v1/votes?fingerprint=eq.claude-e2e-test-delete-me-2\" -Method DELETE -Headers $h; \"test vote deleted\")",
       "PowerShell(npm run check 2>$null; \"check exit: $LASTEXITCODE\")",
-      "PowerShell(git add -A)"
+      "PowerShell(git add -A)",
+      "PowerShell(git push)",
+      "PowerShell($r = Invoke-WebRequest -Uri 'https://guessthemodel.com/' -UseBasicParsing; $r.Content.Substring\\(0, [Math]::Min\\(600, $r.Content.Length\\)\\); \"---HEADERS---\"; $r.Headers.GetEnumerator\\(\\) | ForEach-Object { \"$\\($_.Key\\): $\\($_.Value\\)\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri 'https://guessthemodel.netlify.app/' -UseBasicParsing -TimeoutSec 15; \"STATUS: $\\($r.StatusCode\\)\"; if \\($r.Content -match 'AIs\\\\. Tag who wrote what|Lock it in'\\) { \"NEW UI LIVE on netlify.app\" } elseif \\($r.Content -match 'GuessTheModel'\\) { \"app found but OLD UI\" } else { \"unknown site\" } } catch { \"not reachable: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(if \\(Test-Path .claude\\\\skills\\) { Get-ChildItem .claude\\\\skills } else { \"no .claude/skills dir\" }; \"---\"; npx playwright --version 2>$null; \"playwright exit: $LASTEXITCODE\")",
+      "PowerShell(Test-Path node_modules\\\\playwright; Test-Path node_modules\\\\playwright-core; Get-ChildItem \"$env:LOCALAPPDATA\\\\ms-playwright\" -ErrorAction SilentlyContinue | Select-Object -First 6 Name)",
+      "PowerShell($d = \"$env:TEMP\\\\gtm-verify\"; New-Item -ItemType Directory -Force $d | Out-Null; Set-Location $d; npm init -y 2>$null | Out-Null; npm i playwright@1.60.0 --no-audit --no-fund 2>$null | Select-Object -Last 2; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess; \"installed\")",
+      "PowerShell(Start-Sleep -Seconds 4; Set-Location $env:TEMP\\\\gtm-verify; node drive.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node drive.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node probe.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; \\(Invoke-RestMethod -Uri \"$url/rest/v1/battles?select=category\" -Headers $h\\) | Group-Object category | Select-Object Name, Count | Format-Table -AutoSize)",
+      "PowerShell($body = @{ battle_id = '75cf873a-1fc2-4afb-814a-4b9a01ae3c33'; fingerprint = 'claude-verify-v3-delete-me'; favorite = 'A' } | ConvertTo-Json; try { $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/crown' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content } catch { \"FAILED: $\\($_.Exception.Response.StatusCode\\) \"; $_.ErrorDetails.Message })",
+      "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; Invoke-RestMethod -Uri \"$url/rest/v1/votes?fingerprint=eq.claude-verify-v3-delete-me&select=battle_id,choice,score\" -Headers $h | ConvertTo-Json; \"---today's daily---\"; Invoke-RestMethod -Uri \"$url/rest/v1/battles?is_daily=eq.true&order=battle_date.desc&limit=2&select=id,battle_date,prompt\" -Headers $h | ConvertTo-Json)",
+      "PowerShell($body = @{ battle_id = 'f6ee8838-f6b7-431b-afc2-a8623c1d9da7'; fingerprint = 'claude-verify-v3-delete-me'; favorite = 'A' } | ConvertTo-Json; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/crown' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content.Substring\\(0,300\\))",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node crown.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node full.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(npm run build 2>&1)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\mverhill\\.claude\\projects\\c--Users-mverhill-Documents-guess"
+      "C:\\Users\\mverhill\\.claude\\projects\\c--Users-mverhill-Documents-guess",
+      "C:\\Users\\mverhill\\Documents\\guess\\.git",
+      "C:\\Users\\mverhill\\AppData\\Local\\Temp\\gtm-verify"
     ]
   }
 }

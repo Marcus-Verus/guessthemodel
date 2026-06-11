@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SafeBattle, ModelName, RevealPayload, Slot, GuessMap } from '$lib/types';
+	import type { SafeBattle, ModelName, Slot, SlotTruth, CrowdStats } from '$lib/types';
 	import { MODEL_LABELS, MODEL_VERSION_LABELS, BATTLE_MODELS, ALL_SLOTS } from '$lib/types';
 	import type { GameRecord } from '$lib/game';
 	import { loadHistory, recordGame, computeStreaks, scoreTitle, buildShareText } from '$lib/game';
@@ -10,24 +10,32 @@
 
 	let { battle, battleNumber = 0 }: { battle: SafeBattle; battleNumber?: number } = $props();
 
-	// ── game state ───────────────────────────────────────────────
+	interface RoundResult {
+		slot: Slot;
+		guess: ModelName;
+		correct: boolean;
+		truth: SlotTruth;
+	}
+
+	// ── state ────────────────────────────────────────────────────
 
 	const slots = $derived(
 		ALL_SLOTS.filter((s) => (battle.outputs as Record<string, unknown>)[`model${s}`])
 	);
 
-	let guesses = $state<GuessMap>({});
+	let results = $state<RoundResult[]>([]);
+	let feedback = $state<RoundResult | null>(null);
+	let waiting = $state(false);
+	let finished = $state(false);
+	let final = $state<{ score: number; out_of: number; crowd: CrowdStats } | null>(null);
 	let favorite = $state<Slot | null>(null);
-	let loading = $state(false);
+	let crowning = $state(false);
 	let submitError = $state('');
 
-	let revealData = $state<RevealPayload | null>(null);
-	let revealedCards = $state(0);
 	let showPanel = $state(false);
 	let showConfetti = $state(false);
 	let displayScore = $state(0);
-
-	let expanded = $state<Partial<Record<Slot, boolean>>>({});
+	let expanded = $state(false);
 	let copied = $state(false);
 	let statsOpen = $state(false);
 
@@ -42,10 +50,10 @@
 
 	let panelEl = $state<HTMLElement | null>(null);
 
-	const allTagged = $derived(slots.every((s) => guesses[s]));
-	const taggedCount = $derived(slots.filter((s) => guesses[s]).length);
-	const canLock = $derived(allTagged && favorite !== null && !loading);
-	const revealed = $derived(revealData !== null);
+	const round = $derived(results.length);
+	const currentSlot = $derived(slots[round]);
+	const usedModels = $derived(results.map((r) => r.guess));
+	const correctArray = $derived(results.map((r) => r.correct));
 
 	// ── init ─────────────────────────────────────────────────────
 
@@ -56,159 +64,195 @@
 			localStorage.setItem('gtm_fp', fp);
 		}
 		fingerprint = fp;
-
 		alreadySubscribed = !!localStorage.getItem('gtm_subscribed');
-		history = loadHistory();
-		streak = computeStreaks(history).current;
 
-		// already played this battle? restore the reveal without ceremony
-		const cached = localStorage.getItem(`gtm_v2_vote_${battle.id}`);
-		if (cached) {
+		// locals only — reading state this effect writes would loop it
+		const h = loadHistory();
+		history = h;
+		streak = computeStreaks(h).current;
+
+		const cachedFinal = localStorage.getItem(`gtm_v3_done_${battle.id}`);
+		if (cachedFinal) {
 			try {
-				const p: RevealPayload = JSON.parse(cached);
-				revealData = p;
-				guesses = p.your_guesses;
-				favorite = p.your_favorite;
-				revealedCards = slots.length;
-				displayScore = p.score;
+				const p = JSON.parse(cachedFinal);
+				results = p.results;
+				final = { score: p.score, out_of: p.out_of, crowd: p.crowd };
+				favorite = p.favorite ?? null;
+				finished = true;
 				showPanel = true;
+				displayScore = p.score;
+				return;
+			} catch {
+				/* ignore */
+			}
+		}
+
+		// resume a half-finished game
+		const cachedProgress = localStorage.getItem(`gtm_v3_progress_${battle.id}`);
+		if (cachedProgress) {
+			try {
+				results = JSON.parse(cachedProgress);
 			} catch {
 				/* ignore */
 			}
 		}
 	});
 
-	// ── tagging ──────────────────────────────────────────────────
+	// ── play ─────────────────────────────────────────────────────
 
-	function tag(slot: Slot, model: ModelName) {
-		if (revealed || loading) return;
-		const next: GuessMap = { ...guesses };
-		// a model can only be used once — steal it from wherever it was
-		for (const s of slots) {
-			if (next[s] === model) delete next[s];
-		}
-		next[slot] = model;
-		guesses = next;
-	}
-
-	function usedElsewhere(slot: Slot, model: ModelName): boolean {
-		return slots.some((s) => s !== slot && guesses[s] === model);
-	}
-
-	// ── submit + cinematic reveal ────────────────────────────────
-
-	async function lockIn() {
-		if (!canLock || revealed) return;
-		loading = true;
+	async function guess(model: ModelName) {
+		if (waiting || feedback || finished || !currentSlot) return;
+		if (usedModels.includes(model)) return;
+		waiting = true;
 		submitError = '';
 
 		try {
-			const res = await fetch('/api/vote', {
+			const res = await fetch('/api/guess', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ battle_id: battle.id, fingerprint, favorite, guesses })
+				body: JSON.stringify({ battle_id: battle.id, fingerprint, slot: currentSlot, guess: model })
 			});
-			const data: RevealPayload = await res.json();
-			if (!res.ok) throw new Error((data as unknown as { message?: string }).message || 'Something broke');
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.message || 'Something broke');
 
-			localStorage.setItem(`gtm_v2_vote_${battle.id}`, JSON.stringify(data));
+			const r: RoundResult = {
+				slot: currentSlot,
+				guess: data.your_guess,
+				correct: data.correct,
+				truth: data.truth
+			};
+			feedback = r;
+			waiting = false;
 
-			const today = new Date().toISOString().slice(0, 10);
-			history = recordGame({ date: today, battle_id: battle.id, score: data.score, out_of: data.out_of });
-			streak = computeStreaks(history).current;
-
-			playReveal(data);
+			setTimeout(() => {
+				results = [...results, r];
+				feedback = null;
+				if (data.done) {
+					finish(data.score, data.out_of, data.crowd, [...results]);
+				} else {
+					localStorage.setItem(`gtm_v3_progress_${battle.id}`, JSON.stringify(results));
+				}
+			}, 1400);
 		} catch (e) {
-			submitError = e instanceof Error ? e.message : 'Something broke — try again.';
-			loading = false;
+			waiting = false;
+			submitError = e instanceof Error ? e.message : 'Something broke — tap again.';
 		}
 	}
 
-	function playReveal(data: RevealPayload) {
-		revealData = data;
-		// the server is the source of truth — if this fingerprint already voted
-		// (another tab, another day), reflect the original submission
-		guesses = data.your_guesses;
-		favorite = data.your_favorite;
-		const stagger = 500;
-		slots.forEach((_, i) => {
-			setTimeout(() => (revealedCards = i + 1), 300 + i * stagger);
-		});
+	function finish(score: number, out_of: number, crowd: CrowdStats, allResults: RoundResult[]) {
+		final = { score, out_of, crowd };
+		finished = true;
+		localStorage.removeItem(`gtm_v3_progress_${battle.id}`);
+		localStorage.setItem(
+			`gtm_v3_done_${battle.id}`,
+			JSON.stringify({ results: allResults, score, out_of, crowd, favorite: null })
+		);
+
+		const today = new Date().toISOString().slice(0, 10);
+		const h = recordGame({ date: today, battle_id: battle.id, score, out_of });
+		history = h;
+		streak = computeStreaks(h).current;
+
 		setTimeout(() => {
-			loading = false;
 			showPanel = true;
 			panelEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			if (data.score > 0) {
+			if (score > 0) {
 				let c = 0;
 				const iv = setInterval(() => {
 					c++;
-					displayScore = Math.min(c, data.score);
-					if (c >= data.score) clearInterval(iv);
+					displayScore = Math.min(c, score);
+					if (c >= score) clearInterval(iv);
 				}, 160);
 			}
-			if (data.score === data.out_of) showConfetti = true;
-		}, 300 + slots.length * stagger + 350);
+			if (score === out_of) showConfetti = true;
+		}, 250);
+	}
+
+	// ── crown (optional one tap) ─────────────────────────────────
+
+	async function crown(slot: Slot) {
+		if (favorite || crowning || !final) return;
+		crowning = true;
+		try {
+			const res = await fetch('/api/crown', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ battle_id: battle.id, fingerprint, favorite: slot })
+			});
+			const data = await res.json();
+			if (res.ok) {
+				favorite = slot;
+				final = { ...final, crowd: data.crowd };
+				const cached = localStorage.getItem(`gtm_v3_done_${battle.id}`);
+				if (cached) {
+					const p = JSON.parse(cached);
+					p.favorite = slot;
+					p.crowd = data.crowd;
+					localStorage.setItem(`gtm_v3_done_${battle.id}`, JSON.stringify(p));
+				}
+			}
+		} catch {
+			/* non-critical */
+		} finally {
+			crowning = false;
+		}
 	}
 
 	// ── reveal helpers ───────────────────────────────────────────
 
-	const correctBySlot = $derived.by(() => {
-		const map: Partial<Record<Slot, boolean>> = {};
-		if (!revealData) return map;
-		for (const s of slots) map[s] = revealData.your_guesses[s] === revealData.truth[s]?.name;
-		return map;
-	});
-
-	const correctArray = $derived(slots.map((s) => correctBySlot[s] ?? false));
-
 	const crowdFavoriteSlot = $derived.by(() => {
-		if (!revealData) return null;
-		const entries = Object.entries(revealData.crowd.fav) as [Slot, number][];
+		if (!final) return null;
+		const entries = Object.entries(final.crowd.fav) as [Slot, number][];
 		if (entries.length === 0) return null;
 		return entries.sort((a, b) => b[1] - a[1])[0][0];
 	});
 
 	function favPct(slot: Slot): number {
-		if (!revealData || revealData.crowd.players === 0) return 0;
-		return Math.round(((revealData.crowd.fav[slot] ?? 0) / revealData.crowd.players) * 100);
+		if (!final || final.crowd.players === 0) return 0;
+		return Math.round(((final.crowd.fav[slot] ?? 0) / final.crowd.players) * 100);
+	}
+
+	function truthOf(slot: Slot): SlotTruth | null {
+		return results.find((r) => r.slot === slot)?.truth ?? null;
 	}
 
 	const beatPct = $derived.by(() => {
-		if (!revealData) return null;
-		const { score_dist, scored_players } = revealData.crowd;
+		if (!final) return null;
+		const { score_dist, scored_players } = final.crowd;
 		if (scored_players < 5) return null;
-		const beaten = score_dist.slice(0, revealData.score).reduce((a, b) => a + b, 0);
+		const beaten = score_dist.slice(0, final.score).reduce((a, b) => a + b, 0);
 		return Math.round((beaten / scored_players) * 100);
 	});
 
 	const oddsLine = $derived.by(() => {
-		if (!revealData) return '';
-		const { score, out_of } = revealData;
-		if (score === out_of && out_of === 5) return 'Random tagging hits 5/5 once every 120 tries.';
-		if (score === out_of && out_of === 3) return 'Random tagging gets this right once every 6 tries.';
-		if (score === 0) return 'The models are officially indistinguishable to you. Most players land here.';
+		if (!final) return '';
+		const { score, out_of } = final;
+		if (score === out_of && out_of === 5) return 'Random guessing hits 5/5 once every 120 tries.';
+		if (score === out_of && out_of === 3) return 'Random guessing gets this right once every 6 tries.';
+		if (score === 0) return 'The AIs are officially indistinguishable to you. Most players land here.';
 		return '';
 	});
 
-	const title = $derived(revealData ? scoreTitle(revealData.score, revealData.out_of) : '');
+	const title = $derived(final ? scoreTitle(final.score, final.out_of) : '');
 
-	// ── share ────────────────────────────────────────────────────
+	// ── share + email ────────────────────────────────────────────
 
 	async function share() {
-		if (!revealData) return;
+		if (!final) return;
 		const text = buildShareText({
 			battleNumber,
-			score: revealData.score,
-			outOf: revealData.out_of,
+			score: final.score,
+			outOf: final.out_of,
 			correct: correctArray,
 			streak
 		});
-		if (navigator.share) {
+		const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+		if (isMobile && navigator.share) {
 			try {
 				await navigator.share({ text });
 				return;
 			} catch {
-				/* user cancelled — fall through to clipboard */
+				/* cancelled — fall through */
 			}
 		}
 		await navigator.clipboard.writeText(text);
@@ -235,9 +279,10 @@
 		}
 	}
 
-	function truncateWords(text: string, max: number): string {
-		const words = text.trim().split(/\s+/);
-		return words.length <= max ? text : words.slice(0, max).join(' ') + '…';
+	function snippet(slot: Slot, words = 10): string {
+		const text = (battle.outputs as Record<string, { text: string }>)[`model${slot}`]?.text ?? '';
+		const w = text.trim().split(/\s+/);
+		return w.length <= words ? text : w.slice(0, words).join(' ') + '…';
 	}
 </script>
 
@@ -247,204 +292,158 @@
 
 <StatsModal bind:open={statsOpen} {history} />
 
-<div class={revealed ? '' : 'pb-24'}>
+{#if !finished}
+	<!-- ══ PLAY: one response per round, tap a logo, instant reveal ══ -->
 
-	<!-- ══ PROMPT ══════════════════════════════════════════════ -->
-	<p class="text-white font-semibold text-base mb-1">
-		{slots.length} answers. {slots.length} AIs. Tag who wrote what.
-	</p>
-	<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-2 text-sm text-[#E6EDF3] leading-relaxed">
+	<!-- Progress: the grid builds as you go -->
+	<div class="flex items-center justify-between mb-4">
+		<div class="flex gap-1.5">
+			{#each slots as s, i}
+				<div
+					class="h-3.5 w-3.5 rounded-[4px] transition-all duration-300
+					{i < results.length
+						? results[i].correct
+							? 'bg-[#C3F73A]'
+							: 'bg-[#F85149]'
+						: i === round
+							? 'bg-[#30363D] animate-glow'
+							: 'bg-[#21262D]'}"
+				></div>
+			{/each}
+		</div>
+		<span class="text-[#6E7681] text-xs font-medium tabular-nums">Round {Math.min(round + 1, slots.length)} of {slots.length}</span>
+	</div>
+
+	<!-- The prompt -->
+	<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-4 text-sm text-[#E6EDF3] leading-relaxed">
 		"{battle.prompt}"
 	</div>
-	{#if !revealed}
-		<p class="text-[#6E7681] text-xs mb-5">
-			Same lineup, same order, for everyone today. Each model is used exactly once — star the best answer, then lock in.
-		</p>
-	{:else}
-		<div class="mb-5"></div>
-	{/if}
 
-	<!-- ══ RESPONSE CARDS ═══════════════════════════════════════ -->
-	<div class="space-y-3">
-		{#each slots as slot, i}
-			{@const output = (battle.outputs as Record<string, { text: string }>)[`model${slot}`]}
-			{@const isExpanded = expanded[slot] ?? false}
-			{@const wordsLong = output.text.trim().split(/\s+/).length > 70}
-			{@const isRevealed = revealedCards > i && revealData}
-			{@const truth = revealData?.truth[slot]}
-			{@const wasCorrect = correctBySlot[slot] ?? false}
-			{@const isCrowdFav = crowdFavoriteSlot === slot && (revealData?.crowd.players ?? 0) > 0}
+	{#if currentSlot}
+		{@const output = (battle.outputs as Record<string, { text: string }>)[`model${currentSlot}`]}
+		{@const wordsLong = output.text.trim().split(/\s+/).length > 90}
 
+		<!-- One response card -->
+		{#key currentSlot}
 			<div
-				class="card p-4 transition-all duration-300
-				{isRevealed ? (wasCorrect ? 'border-[#C3F73A66]' : 'border-[#F8514940]') : ''}"
+				class="card p-5 mb-4 animate-fade-up transition-colors duration-300
+				{feedback ? (feedback.correct ? 'border-[#C3F73A] bg-[#C3F73A06]' : 'border-[#F85149] bg-[#F8514906]') : ''}"
 			>
-				<!-- Card header -->
-				<div class="flex items-center justify-between mb-2">
-					<span class="text-[#6E7681] text-[10px] font-bold tracking-widest uppercase">Response {i + 1}</span>
-					{#if !revealed}
-						<button
-							onclick={() => (favorite = favorite === slot ? null : slot)}
-							class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold border transition-all
-							{favorite === slot
-								? 'border-[#C3F73A] bg-[#C3F73A15] text-[#C3F73A]'
-								: 'border-[#30363D] text-[#6E7681] hover:text-[#8B949E] hover:border-[#8B949E]'}"
-							aria-pressed={favorite === slot}
-						>
-							<svg width="11" height="11" viewBox="0 0 24 24" fill={favorite === slot ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
-								<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-							</svg>
-							Best answer
-						</button>
-					{:else if revealData && favorite === slot}
-						<span class="text-[10px] font-bold text-[#C3F73A] tracking-widest uppercase">Your favorite</span>
-					{/if}
-				</div>
-
-				<!-- Identity reveal (flips in one card at a time) -->
-				{#if isRevealed && truth}
-					<div class="animate-flip-in rounded-lg px-3 py-2.5 mb-3 flex items-center justify-between gap-2
-						{wasCorrect ? 'bg-[#C3F73A10] border border-[#C3F73A40]' : 'bg-[#F8514908] border border-[#F8514930]'}">
-						<div class="flex items-center gap-2.5 min-w-0">
-							<ModelLogo model={truth.name} size="md" />
-							<div class="min-w-0">
-								<p class="text-white text-sm font-bold leading-tight">{MODEL_LABELS[truth.name]}</p>
-								{#if MODEL_VERSION_LABELS[truth.model_id]}
-									<p class="text-[#6E7681] text-[10px]">{MODEL_VERSION_LABELS[truth.model_id]}</p>
-								{/if}
-							</div>
-						</div>
-						<div class="text-right shrink-0">
-							{#if wasCorrect}
-								<p class="text-[#C3F73A] text-xs font-bold">✓ You got it</p>
-							{:else}
-								<p class="text-[#F85149] text-xs font-bold">✗ You said {revealData ? MODEL_LABELS[revealData.your_guesses[slot] ?? 'claude'] : ''}</p>
-							{/if}
-							{#if (revealData?.crowd.players ?? 0) > 0}
-								<p class="text-[#6E7681] text-[10px] mt-0.5">
-									{favPct(slot)}% favorited{isCrowdFav ? ' · crowd favorite' : ''}
-								</p>
-							{/if}
-						</div>
-					</div>
-				{/if}
-
-				<!-- Response text -->
-				<p class="text-[#8B949E] text-sm leading-relaxed whitespace-pre-wrap {isExpanded ? '' : 'line-clamp-5'}">
-					{isExpanded ? output.text : truncateWords(output.text, 70)}
+				<p class="text-[#6E7681] text-[10px] font-bold tracking-widest uppercase mb-2">
+					Answer {round + 1}
+				</p>
+				<p class="text-[#C9D1D9] text-[15px] leading-relaxed whitespace-pre-wrap {expanded || !wordsLong ? '' : 'line-clamp-[8]'}">
+					{output.text}
 				</p>
 				{#if wordsLong}
-					<button
-						onclick={() => (expanded = { ...expanded, [slot]: !isExpanded })}
-						class="mt-1.5 text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors"
-					>
-						{isExpanded ? '↑ Less' : '↓ Read full answer'}
+					<button onclick={() => (expanded = !expanded)} class="mt-2 text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors">
+						{expanded ? '↑ Less' : '↓ Read it all'}
 					</button>
 				{/if}
+			</div>
+		{/key}
 
-				<!-- Tag chips (pre-reveal) -->
-				{#if !revealed}
-					<div class="mt-3.5 pt-3 border-t border-[#21262D]">
-						<div class="flex items-center justify-between gap-3 flex-wrap">
-							<div class="flex items-center gap-1.5">
-								{#each BATTLE_MODELS as model}
-									{@const here = guesses[slot] === model}
-									{@const elsewhere = usedElsewhere(slot, model)}
-									<button
-										onclick={() => tag(slot, model)}
-										disabled={loading}
-										title={MODEL_LABELS[model]}
-										aria-label="Tag as {MODEL_LABELS[model]}"
-										aria-pressed={here}
-										class="rounded-lg p-1.5 border transition-all
-										{here
-											? 'border-[#C3F73A] bg-[#C3F73A12] scale-110'
-											: elsewhere
-												? 'border-transparent opacity-30 hover:opacity-60'
-												: 'border-[#30363D] hover:border-[#8B949E] hover:scale-105'}"
-									>
-										<ModelLogo {model} size="sm" />
-									</button>
-								{/each}
-							</div>
-							<span class="text-xs {guesses[slot] ? 'text-[#C3F73A] font-medium' : 'text-[#6E7681]'}">
-								{guesses[slot] ? MODEL_LABELS[guesses[slot]!] : 'Who wrote this?'}
-							</span>
-						</div>
-					</div>
-				{/if}
+		<!-- Feedback flash OR the 5 buttons -->
+		{#if feedback}
+			<div
+				class="animate-flip-in rounded-xl px-4 py-4 flex items-center gap-3
+				{feedback.correct ? 'bg-[#C3F73A14] border border-[#C3F73A]' : 'bg-[#F8514910] border border-[#F85149] animate-shake'}"
+			>
+				<ModelLogo model={feedback.truth.name} size="lg" />
+				<div class="min-w-0">
+					<p class="font-bold text-base leading-tight {feedback.correct ? 'text-[#C3F73A]' : 'text-[#F85149]'}">
+						{#if feedback.correct}
+							{MODEL_LABELS[feedback.truth.name]} — nailed it
+						{:else}
+							Nope — that was {MODEL_LABELS[feedback.truth.name]}
+						{/if}
+					</p>
+					<p class="text-[#6E7681] text-xs mt-0.5">
+						{MODEL_VERSION_LABELS[feedback.truth.model_id] ?? ''}{!feedback.correct ? ` · you said ${MODEL_LABELS[feedback.guess]}` : ''}
+					</p>
+				</div>
+			</div>
+		{:else}
+			<p class="text-white font-semibold text-sm mb-2.5">Who wrote this?</p>
+			<div class="grid grid-cols-5 gap-1.5 sm:gap-2">
+				{#each BATTLE_MODELS as model}
+					{@const used = usedModels.includes(model)}
+					<button
+						onclick={() => guess(model)}
+						disabled={used || waiting}
+						class="flex flex-col items-center gap-1.5 rounded-xl border px-1 py-3 transition-all
+						{used
+							? 'border-transparent opacity-25 cursor-not-allowed'
+							: waiting
+								? 'border-[#30363D] opacity-60 cursor-wait'
+								: 'border-[#30363D] bg-[#1C2128] hover:border-[#C3F73A] hover:bg-[#C3F73A0A] hover:scale-[1.04] active:scale-95'}"
+					>
+						<ModelLogo {model} size="md" />
+						<span class="text-[10px] sm:text-[11px] font-semibold {used ? 'text-[#6E7681]' : 'text-white'}">
+							{MODEL_LABELS[model]}
+						</span>
+					</button>
+				{/each}
+			</div>
+			{#if round === 0}
+				<p class="text-[#6E7681] text-xs mt-3 text-center">Each AI writes exactly one answer. Same puzzle for everyone today.</p>
+			{/if}
+			{#if submitError}
+				<p class="mt-3 text-[#F85149] text-sm text-center animate-shake">{submitError}</p>
+			{/if}
+		{/if}
+	{/if}
+{:else}
+	<!-- ══ DONE: compact recap + score panel ══════════════════════ -->
+
+	<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-4 text-sm text-[#8B949E] leading-relaxed">
+		"{battle.prompt}"
+	</div>
+
+	<div class="space-y-2 mb-5">
+		{#each results as r, i}
+			<div class="card px-4 py-3 flex items-center gap-3 {r.correct ? '' : 'opacity-80'}">
+				<span class="text-[#6E7681] text-xs tabular-nums w-3">{i + 1}</span>
+				<ModelLogo model={r.truth.name} size="sm" />
+				<div class="flex-1 min-w-0">
+					<p class="text-white text-sm font-medium leading-tight">
+						{MODEL_LABELS[r.truth.name]}
+						{#if crowdFavoriteSlot === r.slot && final && final.crowd.players > 0}
+							<span class="ml-1.5 text-[9px] font-bold bg-[#C3F73A] text-[#0D1117] px-1.5 py-0.5 rounded-full align-middle">CROWD FAVE</span>
+						{/if}
+					</p>
+					<p class="text-[#6E7681] text-xs truncate">"{snippet(r.slot)}"</p>
+				</div>
+				<span class="shrink-0 text-xs font-bold {r.correct ? 'text-[#C3F73A]' : 'text-[#F85149]'}">
+					{r.correct ? '✓' : `✗ ${MODEL_LABELS[r.guess]}`}
+				</span>
 			</div>
 		{/each}
 	</div>
 
-	<!-- ══ STICKY LOCK BAR (pre-reveal) ══════════════════════════ -->
-	{#if !revealed}
-		<div class="fixed bottom-0 inset-x-0 z-40 border-t border-[#30363D]" style="background:#0D1117f2;backdrop-filter:blur(12px)">
-			<div class="mx-auto max-w-6xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-				<div class="min-w-0">
-					<p class="text-white text-sm font-semibold tabular-nums">
-						{taggedCount}/{slots.length} tagged
-					</p>
-					<p class="text-[#6E7681] text-xs truncate">
-						{#if !allTagged}
-							Tag every response with a different AI
-						{:else if favorite === null}
-							Now star the best answer
-						{:else}
-							Ready — no take-backs
-						{/if}
-					</p>
-				</div>
-				<button
-					onclick={lockIn}
-					disabled={!canLock}
-					class="shrink-0 rounded-lg px-6 py-3 text-sm font-bold transition-all
-					{canLock
-						? 'bg-[#C3F73A] text-[#0D1117] hover:bg-[#D4F85C] animate-glow'
-						: 'bg-[#21262D] text-[#6E7681] cursor-not-allowed'}"
-				>
-					{#if loading}
-						<span class="flex items-center gap-2">
-							<span class="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin"></span>
-							Revealing…
-						</span>
-					{:else}
-						Lock it in
-					{/if}
-				</button>
-			</div>
-		</div>
-		{#if submitError}
-			<p class="mt-4 text-[#F85149] text-sm animate-shake">{submitError} <button onclick={lockIn} class="underline underline-offset-2 hover:text-white transition-colors">Retry</button></p>
-		{/if}
-	{/if}
-
-	<!-- ══ RESULT PANEL ══════════════════════════════════════════ -->
-	{#if showPanel && revealData}
-		<div bind:this={panelEl} class="mt-6 animate-fade-up">
+	{#if showPanel && final}
+		<div bind:this={panelEl} class="animate-fade-up">
 			<div class="card p-6 sm:p-8 text-center relative overflow-hidden
-				{revealData.score === revealData.out_of ? 'border-[#C3F73A]' : ''}">
+				{final.score === final.out_of ? 'border-[#C3F73A]' : ''}">
 
 				<p class="label mb-3">{battleNumber ? `Battle #${battleNumber}` : 'Result'}</p>
 
 				<p class="font-black tabular-nums leading-none mb-2 animate-pop
-					{revealData.score === revealData.out_of ? 'text-[#C3F73A]' : 'text-white'}"
+					{final.score === final.out_of ? 'text-[#C3F73A]' : 'text-white'}"
 					style="font-size:64px">
-					{displayScore}<span class="text-[#6E7681] text-3xl font-bold">/{revealData.out_of}</span>
+					{displayScore}<span class="text-[#6E7681] text-3xl font-bold">/{final.out_of}</span>
 				</p>
 
-				<p class="text-lg font-bold mb-4 {revealData.score === revealData.out_of ? 'text-[#C3F73A]' : revealData.score === 0 ? 'text-[#F85149]' : 'text-white'}">
+				<p class="text-lg font-bold mb-4 {final.score === final.out_of ? 'text-[#C3F73A]' : final.score === 0 ? 'text-[#F85149]' : 'text-white'}">
 					{title}
 				</p>
 
-				<!-- Result grid (screenshot bait) -->
 				<div class="flex justify-center gap-1.5 mb-5">
 					{#each correctArray as c}
 						<div class="h-8 w-8 rounded-md {c ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}"></div>
 					{/each}
 				</div>
 
-				<!-- Context lines -->
 				<div class="space-y-1.5 mb-6 text-sm">
 					{#if beatPct !== null}
 						<p class="text-[#8B949E]">You beat <span class="text-white font-semibold">{beatPct}%</span> of today's players</p>
@@ -452,16 +451,12 @@
 					{#if oddsLine}
 						<p class="text-[#6E7681] text-xs">{oddsLine}</p>
 					{/if}
-					{#if crowdFavoriteSlot && revealData.crowd.players > 1}
-						{@const cf = revealData.truth[crowdFavoriteSlot]}
+					{#if favorite && crowdFavoriteSlot && final.crowd.players > 1}
+						{@const cf = truthOf(crowdFavoriteSlot)}
 						{#if cf}
 							<p class="text-[#8B949E]">
 								Crowd's favorite answer: <span class="text-white font-semibold">{MODEL_LABELS[cf.name]}</span> ({favPct(crowdFavoriteSlot)}%)
-								{#if favorite === crowdFavoriteSlot}
-									— you agreed
-								{:else if favorite && revealData.truth[favorite]}
-									— you picked {MODEL_LABELS[revealData.truth[favorite]!.name]}
-								{/if}
+								{#if favorite === crowdFavoriteSlot}— you agreed{/if}
 							</p>
 						{/if}
 					{/if}
@@ -470,7 +465,6 @@
 					{/if}
 				</div>
 
-				<!-- Actions -->
 				<div class="flex flex-wrap justify-center gap-2 mb-4">
 					<button
 						onclick={share}
@@ -489,6 +483,25 @@
 
 				<Countdown />
 			</div>
+
+			<!-- Optional crown -->
+			{#if !favorite}
+				<div class="card p-4 mt-4">
+					<p class="text-white font-medium text-sm mb-2.5">One last tap — which answer was actually best?</p>
+					<div class="grid grid-cols-5 gap-1.5">
+						{#each results as r}
+							<button
+								onclick={() => crown(r.slot)}
+								disabled={crowning}
+								class="flex flex-col items-center gap-1 rounded-lg border border-[#30363D] px-1 py-2.5 transition-all hover:border-[#C3F73A] hover:scale-[1.04] active:scale-95 disabled:opacity-50"
+							>
+								<ModelLogo model={r.truth.name} size="sm" />
+								<span class="text-[9px] text-[#8B949E]">{MODEL_LABELS[r.truth.name]}</span>
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			<!-- Email -->
 			{#if !emailSubmitted && !alreadySubscribed}
@@ -516,4 +529,4 @@
 			{/if}
 		</div>
 	{/if}
-</div>
+{/if}

@@ -1,6 +1,6 @@
 import type { Config } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
-import { PROMPTS } from '../../src/lib/prompts.js';
+import { PROMPTS, DAILY_CATEGORIES } from '../../src/lib/prompts.js';
 
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.PRIVATE_SUPABASE_SERVICE_ROLE_KEY!;
@@ -19,7 +19,8 @@ const SYSTEM_PROMPT =
 	"Answer the user's prompt directly in under 120 words. Never state your name, your maker, or your model version.";
 
 type Category = keyof typeof PROMPTS;
-const CATEGORIES = Object.keys(PROMPTS) as Category[];
+// Daily battles only use mass-appeal categories — no nerd prompts headlining
+const CATEGORIES = DAILY_CATEGORIES as Category[];
 
 async function callModel(modelId: string, prompt: string): Promise<string> {
 	const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {

@@ -35,9 +35,9 @@
 					every visitor — the daily puzzle is shared, like a crossword.
 				</p>
 				<p>
-					Players tag each response with the model they think wrote it, star the best answer, and lock in.
-					The reveal shows their score out of five, which model wrote each response, how the crowd voted,
-					and how their score compares to everyone else's that day.
+					Players see one answer at a time and tap which AI they think wrote it — instant reveal after
+					every tap, five rounds, score out of five. The finale shows how their score compares to
+					everyone else's that day, plus which answer the crowd crowned best.
 				</p>
 				<p>
 					The result is a continuously updated, crowd-sourced benchmark that no AI company controls,
