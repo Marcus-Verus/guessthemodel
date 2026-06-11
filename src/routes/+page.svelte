@@ -33,11 +33,15 @@
 
 	<!-- Hero -->
 	<div class="mb-10">
+		<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#C3F73A30] bg-[#C3F73A08] mb-4">
+			<span class="h-1.5 w-1.5 rounded-full bg-[#C3F73A]"></span>
+			<span class="text-[#C3F73A] text-xs font-medium tracking-wide uppercase">Social human benchmark</span>
+		</div>
 		<h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight mb-3">
 			Can you tell which <em class="text-[#C3F73A] not-italic">AI wrote this?</em>
 		</h1>
-		<p class="text-[#8B949E] text-base">
-			Vote blind. Guess the model. See if the crowd agrees.
+		<p class="text-[#8B949E] text-base max-w-xl">
+			5 models. Same prompt. No names. Real humans vote blind — the only AI benchmark brands can't game.
 		</p>
 	</div>
 

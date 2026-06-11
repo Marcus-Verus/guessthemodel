@@ -41,6 +41,14 @@
 		{
 			q: 'Can I vote on past battles?',
 			a: 'Yes. Every battle has a permanent link (shown below the battle card on the homepage). All archived battles are fully voteable and counted in the leaderboard.'
+		},
+		{
+			q: 'How is the data verified — are these real humans or bots?',
+			a: 'Each voter gets a random browser fingerprint on first visit (stored in localStorage). One vote per fingerprint per battle. We deduplicate at submission. Coordinated voting is a real risk for any open platform — our mitigation is fingerprint deduplication and we publish raw vote counts so anomalies are visible. Full methodology at /methodology.'
+		},
+		{
+			q: 'Can I access the data for research?',
+			a: 'Aggregate results are public on the leaderboard. Individual records are anonymised (no user identity is stored, only fingerprint hashes and vote choices). For bulk exports or research access, contact us at data@guessthemodel.com.'
 		}
 	];
 

@@ -9,6 +9,7 @@
 			</a>
 			<div class="flex items-center gap-5">
 				<a href="/leaderboard" class="text-[#8B949E] hover:text-white text-sm transition-colors">Leaderboard</a>
+				<a href="/methodology" class="text-[#8B949E] hover:text-white text-sm transition-colors hidden sm:inline">Methodology</a>
 				<a href="/faq" class="text-[#8B949E] hover:text-white text-sm transition-colors">FAQ</a>
 			</div>
 		</div>
