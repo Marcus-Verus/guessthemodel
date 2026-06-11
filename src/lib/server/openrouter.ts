@@ -2,18 +2,19 @@ import { OPENROUTER_API_KEY } from '$env/static/private';
 import type { ModelName } from '$lib/types';
 
 export const OPENROUTER_MODELS: Record<ModelName, string> = {
-	claude: 'anthropic/claude-sonnet-4-5',
-	chatgpt: 'openai/gpt-4o',
-	gemini: 'google/gemini-pro-1.5',
-	grok: 'x-ai/grok-2-1212',
-	perplexity: 'perplexity/llama-3.1-sonar-large-128k-online'
+	claude:      'anthropic/claude-sonnet-4-5',
+	chatgpt:     'openai/gpt-4o',
+	gemini:      'google/gemini-pro-1.5',
+	grok:        'x-ai/grok-2-1212',
+	perplexity:  'perplexity/llama-3.1-sonar-large-128k-online'
 };
 
-/** The fixed three models used in every battle */
 const BATTLE_MODEL_ENTRIES: [ModelName, string][] = [
-	['claude', OPENROUTER_MODELS.claude],
-	['chatgpt', OPENROUTER_MODELS.chatgpt],
-	['gemini', OPENROUTER_MODELS.gemini]
+	['claude',     OPENROUTER_MODELS.claude],
+	['chatgpt',    OPENROUTER_MODELS.chatgpt],
+	['gemini',     OPENROUTER_MODELS.gemini],
+	['grok',       OPENROUTER_MODELS.grok],
+	['perplexity', OPENROUTER_MODELS.perplexity]
 ];
 
 const SYSTEM_PROMPT =
@@ -48,11 +49,13 @@ async function callModel(modelId: string, prompt: string): Promise<string> {
 	return data.choices[0]?.message?.content ?? '';
 }
 
-/** Call all three battle models in parallel */
+/** Call all five battle models in parallel */
 export async function generateBattleOutputs(prompt: string): Promise<{
-	claude: { text: string; model_id: string };
-	chatgpt: { text: string; model_id: string };
-	gemini: { text: string; model_id: string };
+	claude:     { text: string; model_id: string };
+	chatgpt:    { text: string; model_id: string };
+	gemini:     { text: string; model_id: string };
+	grok:       { text: string; model_id: string };
+	perplexity: { text: string; model_id: string };
 }> {
 	const results = await Promise.allSettled(
 		BATTLE_MODEL_ENTRIES.map(async ([name, modelId]) => ({
@@ -80,8 +83,10 @@ export async function generateBattleOutputs(prompt: string): Promise<{
 	}
 
 	return {
-		claude: outputs.claude!,
-		chatgpt: outputs.chatgpt!,
-		gemini: outputs.gemini!
+		claude:     outputs.claude!,
+		chatgpt:    outputs.chatgpt!,
+		gemini:     outputs.gemini!,
+		grok:       outputs.grok!,
+		perplexity: outputs.perplexity!
 	};
 }

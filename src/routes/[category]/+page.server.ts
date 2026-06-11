@@ -30,7 +30,9 @@ export const load: PageServerLoad = async ({ params, url }) => {
 			outputs: {
 				modelA: { text: battle.outputs.modelA.text },
 				modelB: { text: battle.outputs.modelB.text },
-				modelC: { text: battle.outputs.modelC.text }
+				modelC: { text: battle.outputs.modelC.text },
+				...(battle.outputs.modelD ? { modelD: { text: battle.outputs.modelD.text } } : {}),
+				...(battle.outputs.modelE ? { modelE: { text: battle.outputs.modelE.text } } : {})
 			}
 		};
 	});
