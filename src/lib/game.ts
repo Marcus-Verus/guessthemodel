@@ -73,13 +73,28 @@ export function buildShareText(opts: {
 	outOf: number;
 	correct: boolean[];
 	streak: number;
+	title?: string;
+	tagline?: string;
 }): string {
-	const { battleNumber, score, outOf, correct, streak } = opts;
+	const { battleNumber, score, outOf, correct, streak, title, tagline } = opts;
 	const lines = [
 		`GuessTheModel ${battleNumber ? `#${battleNumber} ` : ''}${score}/${outOf}`,
 		emojiGrid(correct)
 	];
+	if (title) lines.push(title);
 	if (streak >= 2) lines.push(`🔥 ${streak}-day streak`);
-	lines.push('Can you tell ChatGPT from Claude?', 'https://guessthemodel.com');
+	lines.push(tagline ?? 'Can you tell ChatGPT from Claude?', 'https://guessthemodel.com');
 	return lines.join('\n');
+}
+
+/** Titles for the Human-or-AI game. The insults are the share bait. */
+export function deckTitle(score: number, outOf: number): string {
+	if (outOf <= 0) return '';
+	if (score === outOf) return 'Bot Detector';
+	if (score === 0) return 'Perfectly Backwards';
+	const r = score / outOf;
+	if (r >= 0.8) return 'Sharp Eye';
+	if (r >= 0.6) return 'Decent Radar';
+	if (r >= 0.45) return 'Coin Flipper';
+	return 'Certified NPC';
 }

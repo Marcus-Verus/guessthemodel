@@ -42,7 +42,10 @@
       "PowerShell($body = @{ battle_id = 'f6ee8838-f6b7-431b-afc2-a8623c1d9da7'; fingerprint = 'claude-verify-v3-delete-me'; favorite = 'A' } | ConvertTo-Json; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/crown' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content.Substring\\(0,300\\))",
       "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node crown.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
       "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node full.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
-      "PowerShell(npm run build 2>&1)"
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell($r = Invoke-WebRequest -Uri 'http://localhost:5173/' -UseBasicParsing; if \\($r.Content -match 'heartfelt'\\) { \"homepage shows roast battle: OK\" } else { \"MISSING\" })",
+      "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; try { Invoke-RestMethod -Uri \"$url/rest/v1/decks?select=id&limit=1\" -Headers $h | Out-Null; \"MIGRATION 006 \\(decks\\): APPLIED\" } catch { \"MIGRATION 006 \\(decks\\): NOT APPLIED\" })",
+      "PowerShell($r = Invoke-WebRequest -Uri 'http://localhost:5173/' -UseBasicParsing; \"HOME: $\\($r.StatusCode\\)\"; if \\($r.Content -match 'which AI wrote it'\\) { \"fallback \\(battle main\\): OK\" }; if \\($r.Content -match \"what's human\"\\) { \"deck UI present \\(unexpected\\)\" })"
     ],
     "additionalDirectories": [
       "C:\\Users\\mverhill\\.claude\\projects\\c--Users-mverhill-Documents-guess",

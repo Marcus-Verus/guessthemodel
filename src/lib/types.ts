@@ -131,6 +131,35 @@ export interface RevealPayload {
 	crowd: CrowdStats;
 }
 
+// ── Human-or-AI decks (the front-door game) ──────────────────
+
+export type DeckSource = 'human' | 'ai';
+
+export interface DeckItem {
+	text: string;
+	source: DeckSource;
+	/** Reveal attribution: "Mark Twain" or "GPT-5.5" */
+	label: string;
+	model_id?: string;
+}
+
+export interface Deck {
+	id: string;
+	theme: string;
+	items: DeckItem[];
+	is_daily: boolean;
+	deck_date: string | null;
+	created_at: string;
+}
+
+/** Stripped for the browser — no sources or labels until each guess lands */
+export interface SafeDeck {
+	id: string;
+	theme: string;
+	items: { text: string }[];
+	deck_date: string | null;
+}
+
 export interface GlobalStats {
 	votes_cast: number;
 	battles_run: number;

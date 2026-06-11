@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import BattleFlow from '$lib/components/BattleFlow.svelte';
+	import HumanOrAI from '$lib/components/HumanOrAI.svelte';
 	import CategoryNav from '$lib/components/CategoryNav.svelte';
 	import StatsRow from '$lib/components/StatsRow.svelte';
 	import StreakBadge from '$lib/components/StreakBadge.svelte';
@@ -37,26 +38,56 @@
 	<!-- Slim hero — the game is the hero -->
 	<div class="mb-6">
 		<div class="flex items-center gap-3 flex-wrap mb-3">
-			{#if data.battleNumber > 0}
-				<span class="label">Daily battle #{data.battleNumber}</span>
+			{#if data.deck}
+				<span class="label">Daily #{data.deckNumber > 0 ? data.deckNumber : 1}</span>
+				{#if data.deckTheme}
+					<span class="text-xs px-2 py-0.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A]">
+						{data.deckTheme.label}
+					</span>
+				{/if}
 			{:else}
-				<span class="label">Daily battle</span>
-			{/if}
-			{#if data.daily}
-				<span class="text-xs px-2 py-0.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A]">
-					{CATEGORY_LABELS[data.daily.category]}
-				</span>
+				<span class="label">Daily battle{data.battleNumber > 0 ? ` #${data.battleNumber}` : ''}</span>
 			{/if}
 			<span class="ml-auto"><Countdown /></span>
 		</div>
 		<h1 class="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2">
-			Can you tell <em class="text-[#C3F73A] not-italic">which AI wrote it?</em>
+			{#if data.deck}
+				Can you tell <em class="text-[#C3F73A] not-italic">what's human?</em>
+			{:else}
+				Can you tell <em class="text-[#C3F73A] not-italic">which AI wrote it?</em>
+			{/if}
 		</h1>
 		<StreakBadge />
 	</div>
 
-	<!-- Today's battle — front and center -->
-	{#if data.daily}
+	<!-- The daily game — Human or AI -->
+	{#if data.deck}
+		<div class="mb-8">
+			<div class="card p-5 sm:p-6">
+				<HumanOrAI deck={data.deck} deckNumber={data.deckNumber} tagline={data.deckTheme?.tagline ?? ''} />
+			</div>
+		</div>
+
+		<!-- Expert mode: the 5-model battle -->
+		{#if data.daily}
+			<a
+				href="/battle/{data.daily.id}"
+				class="block mb-12 card p-5 border-[#D2A8FF30] hover:border-[#D2A8FF] transition-colors group"
+			>
+				<div class="flex items-center justify-between gap-4">
+					<div class="min-w-0">
+						<p class="text-[10px] font-bold tracking-widest uppercase text-[#D2A8FF] mb-1">Expert mode</p>
+						<p class="text-white font-semibold text-sm group-hover:text-[#D2A8FF] transition-colors">
+							5 AIs answered the same prompt. Guess WHO wrote WHAT.
+						</p>
+						<p class="text-[#6E7681] text-xs mt-1 truncate">"{data.daily.prompt}"</p>
+					</div>
+					<span class="text-[#6E7681] group-hover:text-[#D2A8FF] transition-colors shrink-0">→</span>
+				</div>
+			</a>
+		{/if}
+	{:else if data.daily}
+		<!-- Fallback: no deck yet — the battle is the main event -->
 		<div class="mb-12">
 			<div class="card p-5 sm:p-6">
 				<BattleFlow battle={data.daily} battleNumber={data.battleNumber} />
@@ -64,7 +95,7 @@
 		</div>
 	{:else}
 		<div class="mb-12 card p-10 text-center">
-			<p class="text-[#8B949E]">No battle scheduled for today. Check back tomorrow.</p>
+			<p class="text-[#8B949E]">No game scheduled for today. Check back tomorrow.</p>
 		</div>
 	{/if}
 
