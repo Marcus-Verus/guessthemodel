@@ -46,7 +46,7 @@ async function callModel(modelId, prompt) {
     headers: {
       Authorization: `Bearer ${OPENROUTER_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://guessthemodel.com',
+      'Origin': 'https://guessthemodel.com',
       'X-Title': 'GuessTheModel',
     },
     body: JSON.stringify({
