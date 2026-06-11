@@ -2,43 +2,11 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { supabase } from '$lib/server/supabase';
 import { ADMIN_SECRET } from '$env/static/private';
-import { OPENROUTER_API_KEY } from '$env/static/private';
 import { OPENROUTER_MODELS } from '$lib/server/openrouter';
+import { generateImpostor } from '$lib/server/generate';
 import { DECK_THEMES } from '$lib/humans';
 import { MODEL_VERSION_LABELS, BATTLE_MODELS } from '$lib/types';
 import type { DeckItem } from '$lib/types';
-
-/** A usable impostor: a real sentence, roughly quote-length, no markdown junk */
-function isUsableText(t: string): boolean {
-	const words = t.trim().split(/\s+/);
-	return words.length >= 6 && words.length <= 60 && /^[A-Za-z“"']/.test(t.trim()) && !t.includes('\n\n');
-}
-
-async function generateImpostor(modelId: string, instruction: string): Promise<string> {
-	// generous budget — reasoning models burn tokens thinking before they write
-	for (let attempt = 0; attempt < 2; attempt++) {
-		const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'Content-Type': 'application/json',
-				'HTTP-Referer': 'https://guessthemodel.com',
-				'X-Title': 'GuessTheModel'
-			},
-			body: JSON.stringify({
-				model: modelId,
-				messages: [{ role: 'user', content: instruction }],
-				temperature: 0.9,
-				max_tokens: 1000
-			})
-		});
-		if (!res.ok) throw new Error(`OpenRouter ${modelId}: ${await res.text()}`);
-		const data = await res.json();
-		const text = (data.choices[0]?.message?.content ?? '').trim().replace(/^["'“]|["'”]$/g, '');
-		if (isUsableText(text)) return text;
-	}
-	throw new Error(`Unusable output from ${modelId} after 2 attempts`);
-}
 
 /** Create a Human-or-AI deck: 3 verified human texts + 3 AI impostors, shuffled. */
 export const POST: RequestHandler = async ({ request }) => {

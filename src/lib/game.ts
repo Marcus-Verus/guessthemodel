@@ -87,6 +87,14 @@ export function buildShareText(opts: {
 	return lines.join('\n');
 }
 
+export function survivalShareText(streak: number, best: number): string {
+	const lines = ['GuessTheModel Survival', `💀 Died at ${streak}`];
+	if (best > streak) lines.push(`Personal best: ${best}`);
+	else if (streak > 0) lines.push('New personal best');
+	lines.push('One wrong answer and you’re out. How far can you get?', 'https://guessthemodel.com/survival');
+	return lines.join('\n');
+}
+
 /** Titles for the Human-or-AI game. The insults are the share bait — every title must be instantly understood with zero explanation. */
 export function deckTitle(score: number, outOf: number): string {
 	if (outOf <= 0) return '';

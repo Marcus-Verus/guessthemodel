@@ -52,7 +52,15 @@
       "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node deck.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
       "Bash(curl -s https://guessthemodel.com/)",
       "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node live.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
-      "PowerShell(foreach \\($d in 'spotthebot.com','realorrobot.com','botcha.com','botornot.com','humanormachine.com','certifiedhuman.com'\\) { try { Invoke-RestMethod -Uri \"https://rdap.org/domain/$d\" -TimeoutSec 10 | Out-Null; \"$d : TAKEN\" } catch { if \\($_.Exception.Response.StatusCode.value__ -eq 404\\) { \"$d : AVAILABLE\" } else { \"$d : unknown \\($\\($_.Exception.Response.StatusCode.value__\\)\\)\" } } })"
+      "PowerShell(foreach \\($d in 'spotthebot.com','realorrobot.com','botcha.com','botornot.com','humanormachine.com','certifiedhuman.com'\\) { try { Invoke-RestMethod -Uri \"https://rdap.org/domain/$d\" -TimeoutSec 10 | Out-Null; \"$d : TAKEN\" } catch { if \\($_.Exception.Response.StatusCode.value__ -eq 404\\) { \"$d : AVAILABLE\" } else { \"$d : unknown \\($\\($_.Exception.Response.StatusCode.value__\\)\\)\" } } })",
+      "PowerShell(Start-Sleep -Seconds 6; $env_lines = Get-Content .env; $admin = \\($env_lines | Where-Object { $_ -match '^ADMIN_SECRET=' }\\) -replace '^ADMIN_SECRET=',''; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/pool' -Method POST -ContentType 'application/json' -Headers @{ Authorization = \"Bearer $admin\" } -Body '{\"per_theme\":4}' -UseBasicParsing -TimeoutSec 300; \"POOL SEED: $\\($r.StatusCode\\) -> $\\($r.Content\\)\")",
+      "Bash(sleep 20)",
+      "Bash(cd \"c:/Users/mverhill/Documents/guess\")",
+      "Bash(grep '^PUBLIC_SUPABASE_URL=' .env)",
+      "PowerShell($env_lines = Get-Content .env; $admin = \\($env_lines | Where-Object { $_ -match '^ADMIN_SECRET=' }\\) -replace '^ADMIN_SECRET=',''; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/pool' -Method POST -ContentType 'application/json' -Headers @{ Authorization = \"Bearer $admin\" } -Body '{\"per_theme\":4}' -UseBasicParsing -TimeoutSec 300; \"POOL SEED: $\\($r.StatusCode\\) -> $\\($r.Content\\)\")",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node survival.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node survival2.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)",
+      "PowerShell(Set-Location $env:TEMP\\\\gtm-verify; node survival3.mjs; Set-Location c:\\\\Users\\\\mverhill\\\\Documents\\\\guess)"
     ],
     "additionalDirectories": [
       "C:\\Users\\mverhill\\.claude\\projects\\c--Users-mverhill-Documents-guess",

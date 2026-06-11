@@ -68,6 +68,22 @@
 			</div>
 		</div>
 
+		<!-- Survival mode -->
+		<a
+			href="/survival"
+			class="block mb-4 card p-5 border-[#C3F73A30] hover:border-[#C3F73A] transition-colors group"
+		>
+			<div class="flex items-center justify-between gap-4">
+				<div class="min-w-0">
+					<p class="text-[10px] font-bold tracking-widest uppercase text-[#C3F73A] mb-1">Survival</p>
+					<p class="text-white font-semibold text-sm group-hover:text-[#C3F73A] transition-colors">
+						One wrong answer and you're out. How far can you get?
+					</p>
+				</div>
+				<span class="text-[#6E7681] group-hover:text-[#C3F73A] transition-colors shrink-0">→</span>
+			</div>
+		</a>
+
 		<!-- Expert mode: the 5-model battle -->
 		{#if data.daily}
 			<a
