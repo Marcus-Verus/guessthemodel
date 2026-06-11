@@ -1,21 +1,91 @@
 <script lang="ts">
 	import type { SafeBattle, ModelName, RevealPayload, VoteChoice } from '$lib/types';
-	import { MODEL_LABELS, BATTLE_MODELS } from '$lib/types';
+	import { MODEL_LABELS, MODEL_VERSION_LABELS, BATTLE_MODELS } from '$lib/types';
 	import ModelButton from './ModelButton.svelte';
 
 	let { battle }: { battle: SafeBattle } = $props();
 
 	type Step = 'vote' | 'guess' | 'predict' | 'reveal';
 
-	// Six permutations of [A, B, C] — chosen by hash so each visitor sees a different order
-	const ORDERINGS: VoteChoice[][] = [
-		['A', 'B', 'C'],
-		['A', 'C', 'B'],
-		['B', 'A', 'C'],
-		['B', 'C', 'A'],
-		['C', 'A', 'B'],
-		['C', 'B', 'A']
-	];
+	interface VoteHistoryEntry {
+		date: string;
+		battle_id: string;
+		choice: VoteChoice;
+		picked_model: ModelName | null;
+		model_guess_correct: boolean | null;
+		crowd_prediction_correct: boolean | null;
+	}
+
+	function seededShuffle<T>(arr: T[], seed: number): T[] {
+		const a = [...arr];
+		let s = seed >>> 0;
+		for (let i = a.length - 1; i > 0; i--) {
+			s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+			const j = s % (i + 1);
+			[a[i], a[j]] = [a[j], a[i]];
+		}
+		return a;
+	}
+
+	function computeStreak(history: VoteHistoryEntry[]): number {
+		const dates = new Set(history.map((v) => v.date));
+		let streak = 0;
+		const d = new Date();
+		while (true) {
+			const ds = d.toISOString().slice(0, 10);
+			if (dates.has(ds)) {
+				streak++;
+				d.setDate(d.getDate() - 1);
+			} else {
+				break;
+			}
+		}
+		return streak;
+	}
+
+	function computeTitles(history: VoteHistoryEntry[]): string[] {
+		const titles: string[] = [];
+		const real = history.filter((v) => v.choice !== 'all_bad');
+		const allBad = history.filter((v) => v.choice === 'all_bad');
+
+		if (history.filter((v) => v.model_guess_correct === true).length >= 10)
+			titles.push('🎯 Model Sniper');
+
+		if (history.filter((v) => v.crowd_prediction_correct === true).length >= 7)
+			titles.push('🔮 Crowd Reader');
+
+		if (real.length >= 10) {
+			const last10 = real.slice(-10).map((v) => v.picked_model).filter(Boolean);
+			if (new Set(last10).size >= 4) titles.push('⚡ Bias Breaker');
+		}
+
+		if (allBad.length >= 5) titles.push('💀 All Bad Champion');
+
+		if (real.length >= 10) {
+			const counts: Record<string, number> = {};
+			real.forEach((v) => {
+				if (v.picked_model) counts[v.picked_model] = (counts[v.picked_model] ?? 0) + 1;
+			});
+			const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+			if (top && top[1] / real.length >= 0.7) {
+				const loyalist: Record<string, string> = {
+					claude: '👑 Claude Loyalist',
+					chatgpt: '👑 ChatGPT Loyalist',
+					gemini: '👑 Gemini Loyalist',
+					grok: '👑 Grok Loyalist',
+					perplexity: '👑 Perplexity Loyalist'
+				};
+				if (loyalist[top[0]]) titles.push(loyalist[top[0]]);
+			}
+		}
+
+		return titles;
+	}
+
+	const STEPS: Step[] = ['vote', 'guess', 'predict', 'reveal'];
+
+	// How many models does this battle have?
+	const slotCount = $derived(battle.outputs.modelD ? 5 : 3);
 
 	let step = $state<Step>('vote');
 	let choice = $state<VoteChoice | null>(null);
@@ -27,6 +97,12 @@
 	let fingerprint = $state('');
 	let positionOrder = $state<VoteChoice[]>(['A', 'B', 'C']);
 	let copied = $state(false);
+	let expandedCards = $state<Set<string>>(new Set());
+	let voteHistory = $state<VoteHistoryEntry[]>([]);
+	let streak = $state(0);
+	let titles = $state<string[]>([]);
+
+	const stepIndex = $derived(STEPS.indexOf(step));
 
 	$effect(() => {
 		let fp = localStorage.getItem('gtm_fp');
@@ -38,7 +114,19 @@
 
 		// Deterministic position shuffle per visitor+battle
 		const hash = [...(fp + battle.id)].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-		positionOrder = ORDERINGS[hash % 6];
+		const allSlots: VoteChoice[] = slotCount === 5 ? ['A', 'B', 'C', 'D', 'E'] : ['A', 'B', 'C'];
+		positionOrder = seededShuffle(allSlots, hash);
+
+		// Load vote history for streak + titles
+		try {
+			const raw = localStorage.getItem('gtm_history');
+			const history: VoteHistoryEntry[] = raw ? JSON.parse(raw) : [];
+			voteHistory = history;
+			streak = computeStreak(history);
+			titles = computeTitles(history);
+		} catch {
+			// ignore corrupt cache
+		}
 
 		// Replay cached vote
 		const cached = localStorage.getItem(`gtm_vote_${battle.id}`);
@@ -56,16 +144,33 @@
 		}
 	});
 
-	function getOutput(key: VoteChoice) {
-		if (key === 'all_bad') return battle.outputs.modelA; // never called for all_bad
-		return battle.outputs[`model${key}` as 'modelA' | 'modelB' | 'modelC'];
+	function getOutput(key: VoteChoice): { text: string } {
+		if (key === 'all_bad') return battle.outputs.modelA;
+		return (battle.outputs as Record<string, { text: string }>)[`model${key}`] ?? battle.outputs.modelA;
 	}
 
 	function getModelName(key: VoteChoice): ModelName {
 		if (!revealData || key === 'all_bad') return 'claude';
-		if (key === 'A') return revealData.model_A_name;
-		if (key === 'B') return revealData.model_B_name;
-		return revealData.model_C_name;
+		const map: Record<string, ModelName | undefined> = {
+			A: revealData.model_A_name,
+			B: revealData.model_B_name,
+			C: revealData.model_C_name,
+			D: revealData.model_D_name,
+			E: revealData.model_E_name
+		};
+		return map[key] ?? 'claude';
+	}
+
+	function getModelId(key: VoteChoice): string {
+		if (!revealData || key === 'all_bad') return '';
+		const map: Record<string, string | undefined> = {
+			A: revealData.model_A_id,
+			B: revealData.model_B_id,
+			C: revealData.model_C_id,
+			D: revealData.model_D_id,
+			E: revealData.model_E_id
+		};
+		return map[key] ?? '';
 	}
 
 	function handleVote(position: number | 'all_bad') {
@@ -117,6 +222,36 @@
 				`gtm_vote_${battle.id}`,
 				JSON.stringify({ ...data, model_guess: modelGuess, crowd_prediction: crowdPrediction })
 			);
+
+			// Save to vote history
+			const today = new Date().toISOString().slice(0, 10);
+			if (!voteHistory.some((h) => h.battle_id === battle.id)) {
+				let picked_model: ModelName | null = null;
+				if (choice !== 'all_bad') {
+					const nameMap: Record<string, ModelName | undefined> = {
+						A: data.model_A_name,
+						B: data.model_B_name,
+						C: data.model_C_name,
+						D: data.model_D_name,
+						E: data.model_E_name
+					};
+					picked_model = nameMap[choice] ?? null;
+				}
+				const entry: VoteHistoryEntry = {
+					date: today,
+					battle_id: battle.id,
+					choice,
+					picked_model,
+					model_guess_correct: data.model_guess_correct,
+					crowd_prediction_correct: data.crowd_prediction_correct
+				};
+				const newHistory = [...voteHistory, entry].slice(-90);
+				voteHistory = newHistory;
+				streak = computeStreak(newHistory);
+				titles = computeTitles(newHistory);
+				localStorage.setItem('gtm_history', JSON.stringify(newHistory));
+			}
+
 			step = 'reveal';
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Something went wrong';
@@ -135,29 +270,36 @@
 		if (!revealData) return 0;
 		const { stats, your_choice } = revealData;
 		if (your_choice === 'all_bad') return pct(stats.all_bad, stats.total);
-		const myVotes = your_choice === 'A' ? stats.A : your_choice === 'B' ? stats.B : stats.C;
-		return pct(myVotes, stats.total);
+		const counts: Record<string, number> = {
+			A: stats.A, B: stats.B, C: stats.C, D: stats.D ?? 0, E: stats.E ?? 0
+		};
+		return pct(counts[your_choice] ?? 0, stats.total);
 	}
 
 	async function copyShareText() {
 		if (!revealData) return;
-		const { stats, model_A_name, model_B_name, model_C_name, your_choice } = revealData;
+		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, your_choice } =
+			revealData;
 
 		let pickedLabel: string;
 		if (your_choice === 'all_bad') {
 			pickedLabel = 'None (all bad)';
-		} else if (your_choice === 'A') {
-			pickedLabel = MODEL_LABELS[model_A_name];
-		} else if (your_choice === 'B') {
-			pickedLabel = MODEL_LABELS[model_B_name];
 		} else {
-			pickedLabel = MODEL_LABELS[model_C_name];
+			pickedLabel = MODEL_LABELS[getModelName(your_choice)];
 		}
 
 		const guessLabel = modelGuess ? MODEL_LABELS[modelGuess] : 'skipped';
 		const beat = beatPercent();
 
-		const text = `I picked ${pickedLabel}. Thought it was ${guessLabel}. Beat ${beat}% of voters.\n[${MODEL_LABELS[model_A_name]} ${pct(stats.A, stats.total)}% · ${MODEL_LABELS[model_B_name]} ${pct(stats.B, stats.total)}% · ${MODEL_LABELS[model_C_name]} ${pct(stats.C, stats.total)}%]\nguessthemodel.com`;
+		const parts = [
+			`${MODEL_LABELS[model_A_name]} ${pct(stats.A, stats.total)}%`,
+			`${MODEL_LABELS[model_B_name]} ${pct(stats.B, stats.total)}%`,
+			`${MODEL_LABELS[model_C_name]} ${pct(stats.C, stats.total)}%`,
+			...(model_D_name ? [`${MODEL_LABELS[model_D_name]} ${pct(stats.D ?? 0, stats.total)}%`] : []),
+			...(model_E_name ? [`${MODEL_LABELS[model_E_name]} ${pct(stats.E ?? 0, stats.total)}%`] : [])
+		];
+
+		const text = `I picked ${pickedLabel}. Thought it was ${guessLabel}. Beat ${beat}% of voters.\n[${parts.join(' · ')}]\nguessthemodel.com`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
@@ -169,8 +311,16 @@
 		return getOutput(choice).text;
 	}
 
-	const STEPS: Step[] = ['vote', 'guess', 'predict', 'reveal'];
-	const stepIndex = $derived(STEPS.indexOf(step));
+	function toggleExpand(slot: string) {
+		const next = new Set(expandedCards);
+		if (next.has(slot)) next.delete(slot);
+		else next.add(slot);
+		expandedCards = next;
+	}
+
+	function needsTruncation(text: string): boolean {
+		return text.length > 350 || text.split('\n').length > 6;
+	}
 </script>
 
 <!-- Step progress dots -->
@@ -199,18 +349,31 @@
 			<span>·</span>
 			<span>Temp 0.7</span>
 			<span>·</span>
-			<span>Max 200 words</span>
+			<span>Max 300 words</span>
 			<span>·</span>
 			<span>Order randomised</span>
 		</div>
 
-		<!-- Three outputs -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-			{#each [0, 1, 2] as pos}
-				{@const output = getOutput(positionOrder[pos])}
+		<!-- Model outputs grid -->
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+			{#each Array.from({ length: slotCount }, (_, i) => i) as pos}
+				{@const slot = positionOrder[pos]}
+				{@const output = getOutput(slot)}
+				{@const isExpanded = expandedCards.has(String(pos))}
 				<div class="card p-4 flex flex-col">
 					<p class="label mb-3">Model {String.fromCharCode(65 + pos)}</p>
-					<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap">{output.text}</p>
+					<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap
+						{isExpanded ? '' : 'line-clamp-5'}">
+						{output.text}
+					</p>
+					{#if needsTruncation(output.text)}
+						<button
+							onclick={() => toggleExpand(String(pos))}
+							class="mt-1 text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors text-left"
+						>
+							{isExpanded ? '↑ Show less' : '↓ Read more'}
+						</button>
+					{/if}
 					<button
 						onclick={() => handleVote(pos)}
 						class="mt-4 w-full rounded-lg border border-[#30363D] bg-[#21262D] px-4 py-2.5 text-sm font-medium text-white hover:border-[#C3F73A] hover:bg-[#C3F73A10] hover:text-[#C3F73A] transition-all"
@@ -300,26 +463,33 @@
 				<p class="text-[#F85149] text-sm">{error}</p>
 			</div>
 		{:else if revealData}
-			{@const { stats, model_A_name, model_B_name, model_C_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
+			{@const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
+			{@const maxVotes = Math.max(stats.A, stats.B, stats.C, stats.D ?? 0, stats.E ?? 0)}
 
-			<!-- Three model cards in display order -->
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-				{#each [0, 1, 2] as pos}
+			<!-- Model cards in original display order -->
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+				{#each Array.from({ length: slotCount }, (_, i) => i) as pos}
 					{@const key = positionOrder[pos]}
 					{@const modelName = getModelName(key)}
+					{@const modelId = getModelId(key)}
 					{@const output = getOutput(key)}
 					{@const isMyPick = choice === key}
 					<div class="card p-4 {isMyPick ? 'border-[#3FB950]' : ''}">
-						<div class="flex items-center justify-between mb-3">
-							<p class="label">Model {String.fromCharCode(65 + pos)}</p>
-							<span class="text-sm font-bold text-white">
-								{MODEL_LABELS[modelName]}
-								{#if isMyPick}
-									<span class="ml-1 text-[#3FB950] text-xs">← your pick</span>
+						<div class="flex items-start justify-between mb-1 gap-2">
+							<p class="label shrink-0">Model {String.fromCharCode(65 + pos)}</p>
+							<div class="text-right">
+								<span class="text-sm font-bold text-white">
+									{MODEL_LABELS[modelName]}
+									{#if isMyPick}
+										<span class="ml-1 text-[#3FB950] text-xs">← your pick</span>
+									{/if}
+								</span>
+								{#if MODEL_VERSION_LABELS[modelId]}
+									<p class="text-[#6E7681] text-xs">{MODEL_VERSION_LABELS[modelId]}</p>
 								{/if}
-							</span>
+							</div>
 						</div>
-						<p class="text-[#8B949E] text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
+						<p class="text-[#8B949E] text-xs leading-relaxed whitespace-pre-wrap line-clamp-5 mt-2">
 							{output.text}
 						</p>
 					</div>
@@ -334,9 +504,11 @@
 						{ label: MODEL_LABELS[model_A_name], count: stats.A },
 						{ label: MODEL_LABELS[model_B_name], count: stats.B },
 						{ label: MODEL_LABELS[model_C_name], count: stats.C },
+						...(model_D_name ? [{ label: MODEL_LABELS[model_D_name], count: stats.D ?? 0 }] : []),
+						...(model_E_name ? [{ label: MODEL_LABELS[model_E_name], count: stats.E ?? 0 }] : []),
 						{ label: 'All bad', count: stats.all_bad }
 					] as row, i}
-						{@const isWinner = i < 3 && row.count === Math.max(stats.A, stats.B, stats.C) && row.count > 0}
+						{@const isWinner = i < slotCount && row.count === maxVotes && row.count > 0}
 						<div class="flex items-center gap-3">
 							<span class="text-sm text-[#8B949E] w-28 shrink-0">{row.label}</span>
 							<div class="flex-1 h-2 bg-[#21262D] rounded-full overflow-hidden">
@@ -372,6 +544,22 @@
 				{/if}
 			</div>
 
+			<!-- Streak + titles -->
+			{#if streak > 0}
+				<div class="flex items-center gap-2 text-sm mb-3">
+					<span class="text-[#C3F73A] font-medium">🔥 {streak}-day streak</span>
+				</div>
+			{/if}
+			{#if titles.length > 0}
+				<div class="flex flex-wrap gap-2 mb-4">
+					{#each titles as title}
+						<span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-[#C3F73A15] border border-[#C3F73A40] text-[#C3F73A]">
+							{title}
+						</span>
+					{/each}
+				</div>
+			{/if}
+
 			{#if insight}
 				<p class="text-[#8B949E] text-sm mb-5 italic">"{insight}"</p>
 			{/if}
@@ -388,7 +576,13 @@
 						I said all were bad. Beat {beatPercent()}% of voters.
 					{/if}
 					<br />
-					[{MODEL_LABELS[model_A_name]} {pct(stats.A, stats.total)}% · {MODEL_LABELS[model_B_name]} {pct(stats.B, stats.total)}% · {MODEL_LABELS[model_C_name]} {pct(stats.C, stats.total)}%]
+					[{MODEL_LABELS[model_A_name]} {pct(stats.A, stats.total)}%
+					· {MODEL_LABELS[model_B_name]} {pct(stats.B, stats.total)}%
+					· {MODEL_LABELS[model_C_name]} {pct(stats.C, stats.total)}%{model_D_name
+						? ` · ${MODEL_LABELS[model_D_name]} ${pct(stats.D ?? 0, stats.total)}%`
+						: ''}{model_E_name
+						? ` · ${MODEL_LABELS[model_E_name]} ${pct(stats.E ?? 0, stats.total)}%`
+						: ''}]
 					<br />
 					guessthemodel.com
 				</div>

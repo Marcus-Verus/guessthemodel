@@ -36,9 +36,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			prompt: prompt.trim(),
 			category,
 			outputs: {
-				modelA: { text: outputs.claude.text, model_id: outputs.claude.model_id },
-				modelB: { text: outputs.chatgpt.text, model_id: outputs.chatgpt.model_id },
-				modelC: { text: outputs.gemini.text, model_id: outputs.gemini.model_id }
+				modelA: { text: outputs.claude.text,     model_id: outputs.claude.model_id },
+				modelB: { text: outputs.chatgpt.text,    model_id: outputs.chatgpt.model_id },
+				modelC: { text: outputs.gemini.text,     model_id: outputs.gemini.model_id },
+				modelD: { text: outputs.grok.text,       model_id: outputs.grok.model_id },
+				modelE: { text: outputs.perplexity.text, model_id: outputs.perplexity.model_id }
 			},
 			is_daily,
 			battle_date: battle_date ?? (is_daily ? new Date().toISOString().slice(0, 10) : null)
@@ -55,6 +57,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		model_A: 'claude',
 		model_B: 'chatgpt',
 		model_C: 'gemini',
+		model_D: 'grok',
+		model_E: 'perplexity',
 		prompt: battle.prompt,
 		category: battle.category,
 		is_daily: battle.is_daily,

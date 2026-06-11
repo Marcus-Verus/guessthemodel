@@ -11,7 +11,7 @@ export async function getGlobalStats(): Promise<GlobalStats> {
 	return {
 		votes_cast: votesRes.count ?? 0,
 		battles_run: battlesRes.count ?? 0,
-		models_tested: 3
+		models_tested: 5
 	};
 }
 
@@ -35,12 +35,16 @@ export async function getVoteStats(battleId: string): Promise<VoteStats | null> 
 	const A = votes.filter((v) => v.choice === 'A').length;
 	const B = votes.filter((v) => v.choice === 'B').length;
 	const C = votes.filter((v) => v.choice === 'C').length;
+	const D = votes.filter((v) => v.choice === 'D').length;
+	const E = votes.filter((v) => v.choice === 'E').length;
 	const all_bad = votes.filter((v) => v.choice === 'all_bad').length;
 
 	const outputs = battle.outputs as {
 		modelA: { model_id: string };
 		modelB: { model_id: string };
 		modelC: { model_id: string };
+		modelD?: { model_id: string };
+		modelE?: { model_id: string };
 	};
 
 	return {
@@ -48,10 +52,14 @@ export async function getVoteStats(battleId: string): Promise<VoteStats | null> 
 		A,
 		B,
 		C,
+		D,
+		E,
 		all_bad,
 		model_A_name: modelIdToName(outputs.modelA.model_id),
 		model_B_name: modelIdToName(outputs.modelB.model_id),
-		model_C_name: modelIdToName(outputs.modelC.model_id)
+		model_C_name: modelIdToName(outputs.modelC.model_id),
+		...(outputs.modelD ? { model_D_name: modelIdToName(outputs.modelD.model_id) } : {}),
+		...(outputs.modelE ? { model_E_name: modelIdToName(outputs.modelE.model_id) } : {})
 	};
 }
 
@@ -59,12 +67,14 @@ export function generateInsight(stats: VoteStats): string {
 	if (stats.total === 0) return '';
 
 	const allBadPct = stats.all_bad / stats.total;
-	if (allBadPct > 0.4) return 'Most voters found all three responses disappointing.';
+	if (allBadPct > 0.4) return 'Most voters found all the responses disappointing.';
 
 	const candidates = [
 		{ name: stats.model_A_name, votes: stats.A },
 		{ name: stats.model_B_name, votes: stats.B },
-		{ name: stats.model_C_name, votes: stats.C }
+		{ name: stats.model_C_name, votes: stats.C },
+		...(stats.model_D_name ? [{ name: stats.model_D_name, votes: stats.D ?? 0 }] : []),
+		...(stats.model_E_name ? [{ name: stats.model_E_name, votes: stats.E ?? 0 }] : [])
 	].sort((a, b) => b.votes - a.votes);
 
 	const winner = candidates[0];
