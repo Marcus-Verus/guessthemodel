@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { MODEL_COLORS, CATEGORIES, CATEGORY_LABELS } from '$lib/types';
+	import { MODEL_LABELS, CATEGORIES, CATEGORY_LABELS } from '$lib/types';
 	import ModelLogo from '$lib/components/ModelLogo.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -101,10 +101,45 @@
 
 		<p class="text-[#6E7681] text-xs mt-4 leading-relaxed">
 			<strong class="text-[#8B949E]">Win rate</strong> = battles won ÷ battles appeared in.
-			A battle is "won" by the model that received the most votes (ties don't count).
+			A battle is "won" by the model that received the most favorite votes (ties don't count).
 			<strong class="text-[#8B949E]">Vote share</strong> = votes received ÷ total votes cast in battles featuring that model.
-			"All bad" votes are excluded from both metrics.
 		</p>
+	{/if}
+
+	{#if data.identification.length > 0}
+		<div class="mt-12">
+			<h2 class="text-xl font-bold text-white mb-1">Which AI is easiest to spot?</h2>
+			<p class="text-[#8B949E] text-sm mb-6">
+				How often players correctly identify each model in blind battles — and who it gets mistaken for.
+			</p>
+			<div class="card overflow-hidden">
+				{#each data.identification as row, i}
+					<div class="flex items-center gap-4 px-5 py-4 border-b border-[#30363D] last:border-0">
+						<span class="text-[#6E7681] text-sm tabular-nums w-4">{i + 1}</span>
+						<ModelLogo model={row.model} size="md" />
+						<div class="flex-1 min-w-0">
+							<div class="flex items-center justify-between mb-1.5">
+								<span class="text-white font-medium text-sm">{MODEL_LABELS[row.model]}</span>
+								<span class="text-sm tabular-nums {i === 0 ? 'text-[#C3F73A] font-semibold' : 'text-[#8B949E]'}">
+									{Math.round(row.rate * 100)}% spotted
+								</span>
+							</div>
+							<div class="h-1.5 rounded-full bg-[#21262D] overflow-hidden">
+								<div class="h-full rounded-full {i === 0 ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}" style="width:{Math.round(row.rate * 100)}%"></div>
+							</div>
+							{#if row.mistakenFor}
+								<p class="text-[#6E7681] text-xs mt-1.5">
+									Most mistaken for <span class="text-[#8B949E]">{MODEL_LABELS[row.mistakenFor]}</span>
+								</p>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+			<p class="text-[#6E7681] text-xs mt-4">
+				Based on {data.identification.reduce((s, r) => s + r.shown, 0).toLocaleString()} blind guesses. Random tagging would score 20%.
+			</p>
+		</div>
 	{/if}
 
 </div>

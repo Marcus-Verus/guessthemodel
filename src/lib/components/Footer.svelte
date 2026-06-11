@@ -8,7 +8,7 @@
 					</div>
 					<span class="font-bold text-white text-sm">GuessTheModel</span>
 				</div>
-				<p class="text-[#6E7681] text-sm">Vote blind. Guess the model. See if the crowd agrees.</p>
+				<p class="text-[#6E7681] text-sm">Tag who wrote what. Same puzzle for everyone. New battle daily.</p>
 			</div>
 
 			<div class="flex gap-6">
@@ -21,7 +21,7 @@
 
 		<div class="mt-8 pt-6 border-t border-[#30363D] flex flex-col sm:flex-row items-center justify-between gap-2">
 			<p class="text-[#6E7681] text-xs">
-				Same prompt · Same temperature 0.7 · Same max 200 words · Model outputs cached
+				Same prompt · Identical settings for every model · Outputs cached, blind until you lock in
 			</p>
 			<p class="text-[#6E7681] text-xs">guessthemodel.com</p>
 		</div>

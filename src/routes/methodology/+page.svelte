@@ -1,6 +1,6 @@
 <svelte:head>
 	<title>Methodology — GuessTheModel</title>
-	<meta name="description" content="How GuessTheModel runs blind AI battles: same prompt, same temperature, randomised display order, one vote per person. The social human benchmark." />
+	<meta name="description" content="How GuessTheModel runs blind AI battles: same prompt, same settings, a shared shuffled order, one play per person. The daily human benchmark for AI." />
 </svelte:head>
 
 <div class="mx-auto max-w-2xl px-4 sm:px-6 py-10">
@@ -27,9 +27,9 @@
 			<div class="card p-5 space-y-3 text-sm text-[#8B949E] leading-relaxed">
 				<p>A single prompt is sent to all five models — Claude, ChatGPT, Gemini, Grok, and Perplexity — at the same time using the same parameters:</p>
 				<ul class="space-y-1.5 pl-4 list-disc marker:text-[#C3F73A]">
-					<li>Temperature: <span class="text-white">0.7</span> (same creative range for everyone)</li>
-					<li>Max tokens: <span class="text-white">512</span> (equal length ceiling)</li>
-					<li>No system prompt, no persona, no special instructions</li>
+					<li>Temperature: <span class="text-white">0.8</span> (same creative range for everyone)</li>
+					<li>Max tokens: <span class="text-white">400</span> with a 120-word target (equal length ceiling)</li>
+					<li>Identical minimal system prompt — answer directly, never state your name or version</li>
 					<li>Current flagship model for each provider — the version standard users actually get</li>
 				</ul>
 				<p>
@@ -43,17 +43,18 @@
 		<section>
 			<h2 class="text-white font-semibold text-base mb-4 flex items-center gap-2">
 				<span class="h-5 w-5 rounded flex items-center justify-center text-xs font-bold bg-[#21262D] text-[#C3F73A]">2</span>
-				Display order is randomised per visitor
+				Display order is shuffled per battle — shared by everyone
 			</h2>
 			<div class="card p-5 space-y-3 text-sm text-[#8B949E] leading-relaxed">
 				<p>
-					Position bias is real — people vote for whichever option appears first more often than chance.
-					To eliminate this, we randomise the order each visitor sees using a seeded shuffle tied to their
-					browser fingerprint. Two people viewing the same battle see the models in different orders.
+					Position bias is real — people favor whichever option appears first more often than chance.
+					To counter this, the display order is shuffled with a seeded shuffle tied to the battle itself,
+					so no model owns a position across battles. Crucially, the shuffle is the <em class="text-white not-italic">same for every visitor</em>:
+					today's puzzle is identical for everyone, which is what makes scores comparable and shareable.
 				</p>
 				<p>
-					The model identity behind each slot (A–E) is fixed in our database. Only the visual order you see
-					changes. This means aggregate vote counts per slot reflect genuine preference, not position effects.
+					The model identity behind each response is fixed in our database and stripped before anything is sent
+					to your browser — the answer key never leaves the server until you lock in.
 				</p>
 			</div>
 		</section>

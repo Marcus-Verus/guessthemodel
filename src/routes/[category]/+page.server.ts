@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { supabase } from '$lib/server/supabase';
+import { toSafe } from '$lib/server/battle';
 import type { Battle, SafeBattle, Category } from '$lib/types';
 import { CATEGORIES, CATEGORY_LABELS } from '$lib/types';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
@@ -23,19 +24,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		.order('created_at', { ascending: false })
 		.range(from, from + pageSize - 1);
 
-	const safeBattles: SafeBattle[] = (battles ?? []).map((b) => {
-		const battle = b as unknown as Battle;
-		return {
-			...battle,
-			outputs: {
-				modelA: { text: battle.outputs.modelA.text },
-				modelB: { text: battle.outputs.modelB.text },
-				modelC: { text: battle.outputs.modelC.text },
-				...(battle.outputs.modelD ? { modelD: { text: battle.outputs.modelD.text } } : {}),
-				...(battle.outputs.modelE ? { modelE: { text: battle.outputs.modelE.text } } : {})
-			}
-		};
-	});
+	const safeBattles: SafeBattle[] = (battles ?? []).map((b) => toSafe(b as unknown as Battle));
 
 	return {
 		category,

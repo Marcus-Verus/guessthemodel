@@ -125,8 +125,8 @@
 
 		<div class="mt-8 pt-6 border-t border-[#21262D]">
 			<p class="text-[#6E7681] text-xs leading-relaxed">
-				Data updated live. Each battle uses the same prompt, temperature 0.7, max 300 tokens.
-				Model positions are randomised per visitor. All votes are anonymous.
+				Data updated live. Each battle sends the same prompt with identical generation settings to every model.
+				The lineup order is shuffled per battle — the same for every visitor, so the daily puzzle is shared. All votes are anonymous.
 				<a href="/methodology" class="text-[#8B949E] hover:text-white transition-colors underline">Read methodology →</a>
 			</p>
 		</div>

@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { supabase } from '$lib/server/supabase';
-import { modelIdToName } from '$lib/server/stats';
+import { modelIdToName, getIdentificationStats } from '$lib/server/stats';
 import type { ModelName, Category } from '$lib/types';
 import { MODEL_LABELS, CATEGORIES } from '$lib/types';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
@@ -22,9 +22,10 @@ export const load: PageServerLoad = async ({ url }) => {
 		? (categoryParam as Category)
 		: 'all';
 
-	const [{ data: battles }, { data: votes }] = await Promise.all([
+	const [{ data: battles }, { data: votes }, identification] = await Promise.all([
 		supabase.from('battles').select('id, category, outputs'),
-		supabase.from('votes').select('battle_id, choice')
+		supabase.from('votes').select('battle_id, choice'),
+		getIdentificationStats()
 	]);
 
 	const filteredBattles = activeCategory === 'all'
@@ -103,6 +104,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		rows,
+		identification,
 		activeCategory,
 		totalBattles: filteredBattles.length,
 		totalVotes: totalFilteredVotes,

@@ -1,19 +1,22 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { supabase } from '$lib/server/supabase';
-import { getVoteStats, generateInsight, modelIdToName } from '$lib/server/stats';
-import type { Battle, VoteChoice } from '$lib/types';
+import { getCrowdStats } from '$lib/server/stats';
+import { displaySlots, displayToCanonical, canonicalToDisplay, truthBySlot } from '$lib/server/battle';
+import type { Battle, GuessMap, ModelName, RevealPayload, Slot } from '$lib/types';
+import { BATTLE_MODELS } from '$lib/types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
-	const { battle_id, choice, model_guess, crowd_prediction, fingerprint } = body;
+	const { battle_id, fingerprint, favorite, guesses } = body as {
+		battle_id?: string;
+		fingerprint?: string;
+		favorite?: Slot;
+		guesses?: GuessMap;
+	};
 
-	if (!battle_id || !choice || !fingerprint) {
+	if (!battle_id || !fingerprint || !favorite || !guesses) {
 		error(400, 'Missing required fields');
-	}
-
-	if (!['A', 'B', 'C', 'D', 'E', 'all_bad'].includes(choice)) {
-		error(400, 'Invalid choice');
 	}
 
 	const { data: battleRow } = await supabase
@@ -27,87 +30,77 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const battle = battleRow as unknown as Battle;
-	const model_A_name = modelIdToName(battle.outputs.modelA.model_id);
-	const model_B_name = modelIdToName(battle.outputs.modelB.model_id);
-	const model_C_name = modelIdToName(battle.outputs.modelC.model_id);
-	const model_D_name = battle.outputs.modelD ? modelIdToName(battle.outputs.modelD.model_id) : undefined;
-	const model_E_name = battle.outputs.modelE ? modelIdToName(battle.outputs.modelE.model_id) : undefined;
+	const slots = displaySlots(battle);
+	const truth = truthBySlot(battle);
+
+	// Validate: every slot tagged, all tags are real models, no model used twice
+	if (!slots.includes(favorite)) error(400, 'Invalid favorite');
+	const tagged = slots.map((s) => guesses[s]);
+	if (tagged.some((m) => !m || !BATTLE_MODELS.includes(m))) error(400, 'Tag every response');
+	if (new Set(tagged).size !== tagged.length) error(400, 'Each model can only be used once');
+
+	const score = slots.reduce((n, s) => n + (guesses[s] === truth[s]?.name ? 1 : 0), 0);
+
+	// Store canonically so vote rows mean the same thing across battles
+	const canonicalGuesses: GuessMap = {};
+	for (const s of slots) canonicalGuesses[displayToCanonical(battle, s)] = guesses[s];
 
 	const { data: existing } = await supabase
 		.from('votes')
-		.select('*')
+		.select('choice, guesses, score')
 		.eq('battle_id', battle_id)
 		.eq('fingerprint', fingerprint)
 		.maybeSingle();
 
-	let userChoice: VoteChoice = choice;
-	let userModelGuess = model_guess ?? null;
-	let userCrowdPrediction = crowd_prediction ?? null;
+	let yourFavorite: Slot = favorite;
+	let yourGuesses: GuessMap = guesses;
+	let yourScore = score;
 
 	if (!existing) {
-		const { error: insertError } = await supabase.from('votes').insert({
+		let { error: insertError } = await supabase.from('votes').insert({
 			battle_id,
-			choice,
-			model_guess: model_guess ?? null,
-			crowd_prediction: crowd_prediction ?? null,
+			choice: displayToCanonical(battle, favorite),
+			guesses: canonicalGuesses,
+			score,
 			fingerprint
 		});
+
+		// graceful degradation if migration 004 hasn't been applied yet
+		if (insertError && /column|guesses|score/i.test(insertError.message)) {
+			({ error: insertError } = await supabase.from('votes').insert({
+				battle_id,
+				choice: displayToCanonical(battle, favorite),
+				fingerprint
+			}));
+		}
 
 		if (insertError && !insertError.message.includes('duplicate')) {
 			error(500, 'Failed to save vote');
 		}
 	} else {
-		userChoice = existing.choice;
-		userModelGuess = existing.model_guess;
-		userCrowdPrediction = existing.crowd_prediction;
+		// Replay of an existing vote — return what they originally submitted
+		if (existing.choice !== 'all_bad') {
+			yourFavorite = canonicalToDisplay(battle, existing.choice as Slot);
+		}
+		if (existing.guesses) {
+			yourGuesses = {};
+			for (const [canonical, model] of Object.entries(existing.guesses) as [Slot, ModelName][]) {
+				yourGuesses[canonicalToDisplay(battle, canonical)] = model;
+			}
+			yourScore = typeof existing.score === 'number' ? existing.score : 0;
+		}
 	}
 
-	const stats = await getVoteStats(battle_id);
-	if (!stats) error(500, 'Failed to get stats');
+	const crowd = await getCrowdStats(battle);
 
-	// Which model did they actually vote for?
-	let model_guess_correct: boolean | null = null;
-	if (userModelGuess && userChoice !== 'all_bad') {
-		const actualModel =
-			userChoice === 'A' ? model_A_name
-			: userChoice === 'B' ? model_B_name
-			: userChoice === 'C' ? model_C_name
-			: userChoice === 'D' ? model_D_name
-			: model_E_name;
-		model_guess_correct = actualModel ? userModelGuess === actualModel : null;
-	}
+	const payload: RevealPayload = {
+		truth,
+		your_favorite: yourFavorite,
+		your_guesses: yourGuesses,
+		score: yourScore,
+		out_of: slots.length,
+		crowd
+	};
 
-	// Did they predict the crowd winner correctly?
-	let crowd_prediction_correct: boolean | null = null;
-	if (userCrowdPrediction && stats.total > 1) {
-		const candidates = [
-			{ name: model_A_name, votes: stats.A },
-			{ name: model_B_name, votes: stats.B },
-			{ name: model_C_name, votes: stats.C },
-			...(model_D_name ? [{ name: model_D_name, votes: stats.D ?? 0 }] : []),
-			...(model_E_name ? [{ name: model_E_name, votes: stats.E ?? 0 }] : [])
-		];
-		const winner = candidates.sort((a, b) => b.votes - a.votes)[0];
-		crowd_prediction_correct = userCrowdPrediction === winner.name;
-	}
-
-	const insight = generateInsight(stats);
-
-	return json({
-		model_A_name,
-		model_B_name,
-		model_C_name,
-		model_D_name,
-		model_E_name,
-		model_A_id: battle.outputs.modelA.model_id,
-		model_B_id: battle.outputs.modelB.model_id,
-		model_C_id: battle.outputs.modelC.model_id,
-		model_D_id: battle.outputs.modelD?.model_id,
-		model_E_id: battle.outputs.modelE?.model_id,
-		your_choice: userChoice,
-		model_guess_correct,
-		crowd_prediction_correct,
-		stats,
-		insight
-	});
+	return json(payload);
 };

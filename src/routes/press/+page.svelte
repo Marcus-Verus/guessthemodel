@@ -31,12 +31,13 @@
 				<p>
 					GuessTheModel is the social human benchmark for AI. Every day, the same prompt is sent to five
 					leading AI models — Claude, ChatGPT, Gemini, Grok, and Perplexity — under identical conditions.
-					The outputs are displayed with no model names attached, in a randomised order unique to each visitor.
+					The outputs are displayed with no model names attached, in a shuffled order that is identical for
+					every visitor — the daily puzzle is shared, like a crossword.
 				</p>
 				<p>
-					Visitors vote for the best response, try to guess which AI wrote it, and predict what the crowd
-					will pick. The reveal shows everything: which model wrote each response, how every vote broke down,
-					and whether the voter's guess was right.
+					Players tag each response with the model they think wrote it, star the best answer, and lock in.
+					The reveal shows their score out of five, which model wrote each response, how the crowd voted,
+					and how their score compares to everyone else's that day.
 				</p>
 				<p>
 					The result is a continuously updated, crowd-sourced benchmark that no AI company controls,

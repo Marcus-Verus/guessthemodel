@@ -4,6 +4,14 @@ export type ModelName = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
 
 export type VoteChoice = 'A' | 'B' | 'C' | 'D' | 'E' | 'all_bad';
 
+/** A display slot — what players see. Order is shuffled server-side per battle. */
+export type Slot = 'A' | 'B' | 'C' | 'D' | 'E';
+
+export const ALL_SLOTS: Slot[] = ['A', 'B', 'C', 'D', 'E'];
+
+/** Player's tag for each display slot */
+export type GuessMap = Partial<Record<Slot, ModelName>>;
+
 export const BATTLE_MODELS: ModelName[] = ['claude', 'chatgpt', 'gemini', 'grok', 'perplexity'];
 
 export const MODEL_LABELS: Record<ModelName, string> = {
@@ -24,6 +32,13 @@ export const MODEL_COLORS: Record<ModelName, string> = {
 
 /** Maps OpenRouter model_id → human-readable version label shown on reveal */
 export const MODEL_VERSION_LABELS: Record<string, string> = {
+	// current lineup
+	'anthropic/claude-opus-4.8': 'Claude Opus 4.8',
+	'openai/gpt-5.5': 'GPT-5.5',
+	'google/gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
+	'x-ai/grok-4.3': 'Grok 4.3',
+	'perplexity/sonar-pro': 'Perplexity Sonar Pro',
+	// legacy ids kept for archive battles
 	'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',
 	'anthropic/claude-sonnet-4-6': 'Claude Sonnet 4.6',
 	'anthropic/claude-opus-4-8': 'Claude Opus 4.8',
@@ -36,8 +51,7 @@ export const MODEL_VERSION_LABELS: Record<string, string> = {
 	'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
 	'x-ai/grok-2-1212': 'Grok 2',
 	'x-ai/grok-3': 'Grok 3',
-	'perplexity/llama-3.1-sonar-large-128k-online': 'Perplexity Sonar Large',
-	'perplexity/sonar-pro': 'Perplexity Sonar Pro'
+	'perplexity/llama-3.1-sonar-large-128k-online': 'Perplexity Sonar Large'
 };
 
 export const CATEGORIES: Category[] = ['coding', 'career', 'writing', 'research', 'roast', 'creator', 'meta', 'opinion'];
@@ -91,37 +105,30 @@ export interface SafeBattle {
 	created_at: string;
 }
 
-export interface VoteStats {
-	total: number;
-	A: number;
-	B: number;
-	C: number;
-	D?: number;
-	E?: number;
-	all_bad: number;
-	model_A_name: ModelName;
-	model_B_name: ModelName;
-	model_C_name: ModelName;
-	model_D_name?: ModelName;
-	model_E_name?: ModelName;
+/** What each display slot actually was — revealed only after lock-in */
+export interface SlotTruth {
+	name: ModelName;
+	model_id: string;
+}
+
+export interface CrowdStats {
+	/** players who picked a favorite (excludes legacy all_bad votes) */
+	players: number;
+	/** favorite counts per display slot */
+	fav: Partial<Record<Slot, number>>;
+	/** players with a score (played the matching game) */
+	scored_players: number;
+	/** score_dist[n] = players who scored n */
+	score_dist: number[];
 }
 
 export interface RevealPayload {
-	model_A_name: ModelName;
-	model_B_name: ModelName;
-	model_C_name: ModelName;
-	model_D_name?: ModelName;
-	model_E_name?: ModelName;
-	model_A_id: string;
-	model_B_id: string;
-	model_C_id: string;
-	model_D_id?: string;
-	model_E_id?: string;
-	your_choice: VoteChoice;
-	model_guess_correct: boolean | null;
-	crowd_prediction_correct: boolean | null;
-	stats: VoteStats;
-	insight: string;
+	truth: Partial<Record<Slot, SlotTruth>>;
+	your_favorite: Slot;
+	your_guesses: GuessMap;
+	score: number;
+	out_of: number;
+	crowd: CrowdStats;
 }
 
 export interface GlobalStats {

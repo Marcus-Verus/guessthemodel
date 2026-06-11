@@ -4,7 +4,7 @@
 	const FAQ = [
 		{
 			q: 'How does it work?',
-			a: 'Each battle shows the same prompt answered by 5 AI models — no names shown. You vote for the best response, guess which model wrote it, predict what the crowd will pick, then the reveal shows everything. Vote → Guess → Predict → Reveal.'
+			a: 'Each battle shows the same prompt answered by 5 AI models — no names shown. You tag every response with the model you think wrote it (each model is used exactly once), star the best answer, and lock in. The reveal shows your score out of 5, what the crowd thought, and your streak. Same puzzle for everyone, new battle daily.'
 		},
 		{
 			q: 'Which AI models are included?',
@@ -12,7 +12,7 @@
 		},
 		{
 			q: 'Are the comparisons fair?',
-			a: 'Yes. Every model gets the exact same prompt, the same temperature (0.7), the same maximum length, and the display order is randomised per visitor so position can\'t bias your vote. You can see the methodology bar on every battle.'
+			a: 'Yes. Every model gets the exact same prompt with identical generation settings and the same length cap. The display order is shuffled per battle — but it\'s the same shuffle for every visitor, so the daily puzzle is shared and scores are comparable.'
 		},
 		{
 			q: 'Are outputs cached?',
@@ -23,16 +23,16 @@
 			a: 'No. Your vote history, streak, and player titles are tracked using a random ID stored in your browser. No signup, no email — but your history won\'t carry over to a different device or browser.'
 		},
 		{
-			q: 'What is "All are bad"?',
-			a: 'If you genuinely think all outputs are poor, vote "All are bad." We publish this data publicly — a high "all bad" rate on a category is a more honest signal about where AI still struggles than picking the least-bad answer.'
+			q: 'Why is 4/5 impossible?',
+			a: 'Each model is used exactly once, so if you get four tags right the fifth has nowhere else to go — it must be right too. The possible scores are 0, 1, 2, 3, and 5. Random tagging hits 5/5 about once every 120 tries, and lands on 0/5 more than a third of the time.'
 		},
 		{
 			q: 'How is my streak calculated?',
-			a: 'Your streak counts consecutive days on which you voted on at least one battle. Miss a day and it resets to zero. It\'s tracked locally in your browser.'
+			a: 'Your streak counts consecutive days on which you played at least one battle. Miss a day and it resets to zero. It\'s tracked locally in your browser.'
 		},
 		{
-			q: 'How do I earn player titles?',
-			a: '🎯 Model Sniper — guess the correct model 10+ times total.\n🔮 Crowd Reader — predict the crowd winner 7+ times total.\n⚡ Bias Breaker — vote for 4+ different models in your last 10 votes.\n👑 [Model] Loyalist — 70%+ of your votes go to the same model (10+ votes).\n💀 All Bad Champion — vote "all bad" 5+ times total.'
+			q: 'What do the titles mean?',
+			a: 'Your score earns a title: 5/5 is Model Whisperer, 3/5 is Sharp Eye, 2/5 is Decent Read, 1/5 is Mostly Fooled, and 0/5 is Perfectly Fooled — which is more common than you\'d hope.'
 		},
 		{
 			q: 'Why is this better than benchmarks?',

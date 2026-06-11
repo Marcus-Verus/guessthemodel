@@ -20,9 +20,14 @@ CREATE TABLE IF NOT EXISTS battles (
 CREATE TABLE IF NOT EXISTS votes (
   id                 uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   battle_id          uuid REFERENCES battles(id) ON DELETE CASCADE NOT NULL,
-  choice             text NOT NULL CHECK (choice IN ('A', 'B', 'C', 'all_bad')),
+  -- favorite response, canonical slot (A..E)
+  choice             text NOT NULL CHECK (choice IN ('A', 'B', 'C', 'D', 'E', 'all_bad')),
   model_guess        text CHECK (model_guess IN ('chatgpt', 'claude', 'gemini', 'grok', 'perplexity')),
   crowd_prediction   text CHECK (crowd_prediction IN ('chatgpt', 'claude', 'gemini', 'grok', 'perplexity')),
+  -- full guess map keyed by canonical slot: { "A": "claude", "B": "grok", ... }
+  guesses            jsonb,
+  -- number of correct tags (0..5); NULL for legacy votes
+  score              int,
   fingerprint        text NOT NULL,
   created_at         timestamptz DEFAULT now()
 );

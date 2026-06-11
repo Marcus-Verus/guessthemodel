@@ -2,11 +2,11 @@ import { OPENROUTER_API_KEY } from '$env/static/private';
 import type { ModelName } from '$lib/types';
 
 export const OPENROUTER_MODELS: Record<ModelName, string> = {
-	claude:      'anthropic/claude-sonnet-4-5',
-	chatgpt:     'openai/gpt-4o',
-	gemini:      'google/gemini-pro-1.5',
-	grok:        'x-ai/grok-2-1212',
-	perplexity:  'perplexity/llama-3.1-sonar-large-128k-online'
+	claude:      'anthropic/claude-opus-4.8',
+	chatgpt:     'openai/gpt-5.5',
+	gemini:      'google/gemini-3.1-pro-preview',
+	grok:        'x-ai/grok-4.3',
+	perplexity:  'perplexity/sonar-pro'
 };
 
 const BATTLE_MODEL_ENTRIES: [ModelName, string][] = [
@@ -17,8 +17,10 @@ const BATTLE_MODEL_ENTRIES: [ModelName, string][] = [
 	['perplexity', OPENROUTER_MODELS.perplexity]
 ];
 
+// Deliberately light-touch: the game is spotting each model's natural voice,
+// so we cap length but don't flatten style.
 const SYSTEM_PROMPT =
-	'You are a helpful assistant. Answer the user\'s prompt directly. Keep your response under 80 words. Do not introduce yourself or mention your name or model version.';
+	'Answer the user\'s prompt directly in under 120 words. Never state your name, your maker, or your model version.';
 
 async function callModel(modelId: string, prompt: string): Promise<string> {
 	const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -35,8 +37,8 @@ async function callModel(modelId: string, prompt: string): Promise<string> {
 				{ role: 'system', content: SYSTEM_PROMPT },
 				{ role: 'user', content: prompt }
 			],
-			temperature: 0.7,
-			max_tokens: 150
+			temperature: 0.8,
+			max_tokens: 400
 		})
 	});
 

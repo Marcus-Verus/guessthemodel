@@ -1,7 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { supabase } from '$lib/server/supabase';
-import type { Battle, SafeBattle } from '$lib/types';
+import { toSafe } from '$lib/server/battle';
+import type { Battle } from '$lib/types';
 import { CATEGORY_LABELS } from '$lib/types';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
 
@@ -17,17 +18,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const b = battle as unknown as Battle;
-
-	const safe: SafeBattle = {
-		...b,
-		outputs: {
-			modelA: { text: b.outputs.modelA.text },
-			modelB: { text: b.outputs.modelB.text },
-			modelC: { text: b.outputs.modelC.text },
-			...(b.outputs.modelD ? { modelD: { text: b.outputs.modelD.text } } : {}),
-			...(b.outputs.modelE ? { modelE: { text: b.outputs.modelE.text } } : {})
-		}
-	};
+	const safe = toSafe(b);
 
 	const promptExcerpt = b.prompt.slice(0, 55);
 	const promptDisplay = b.prompt.length > 55 ? `${promptExcerpt}…` : promptExcerpt;

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import type { GlobalStats, ModelName, VoteStats } from '$lib/types';
-import { MODEL_LABELS } from '$lib/types';
+import type { Battle, CrowdStats, GlobalStats, ModelName, Slot } from '$lib/types';
+import { canonicalToDisplay } from './battle';
 
 export interface StandingRow {
 	model: ModelName;
@@ -22,80 +22,105 @@ export async function getGlobalStats(): Promise<GlobalStats> {
 	};
 }
 
-export async function getVoteStats(battleId: string): Promise<VoteStats | null> {
-	const { data: battle } = await supabase
-		.from('battles')
-		.select('outputs')
-		.eq('id', battleId)
-		.single();
-
-	if (!battle) return null;
-
-	const { data: votes } = await supabase
+/** Crowd stats for one battle: favorite counts (keyed by display slot) + score distribution */
+export async function getCrowdStats(battle: Pick<Battle, 'id' | 'outputs'>): Promise<CrowdStats> {
+	let { data: votes } = await supabase
 		.from('votes')
-		.select('choice')
-		.eq('battle_id', battleId);
+		.select('choice, score')
+		.eq('battle_id', battle.id);
 
-	if (!votes) return null;
-
-	const total = votes.length;
-	const A = votes.filter((v) => v.choice === 'A').length;
-	const B = votes.filter((v) => v.choice === 'B').length;
-	const C = votes.filter((v) => v.choice === 'C').length;
-	const D = votes.filter((v) => v.choice === 'D').length;
-	const E = votes.filter((v) => v.choice === 'E').length;
-	const all_bad = votes.filter((v) => v.choice === 'all_bad').length;
-
-	const outputs = battle.outputs as {
-		modelA: { model_id: string };
-		modelB: { model_id: string };
-		modelC: { model_id: string };
-		modelD?: { model_id: string };
-		modelE?: { model_id: string };
-	};
-
-	return {
-		total,
-		A,
-		B,
-		C,
-		D,
-		E,
-		all_bad,
-		model_A_name: modelIdToName(outputs.modelA.model_id),
-		model_B_name: modelIdToName(outputs.modelB.model_id),
-		model_C_name: modelIdToName(outputs.modelC.model_id),
-		...(outputs.modelD ? { model_D_name: modelIdToName(outputs.modelD.model_id) } : {}),
-		...(outputs.modelE ? { model_E_name: modelIdToName(outputs.modelE.model_id) } : {})
-	};
-}
-
-export function generateInsight(stats: VoteStats): string {
-	if (stats.total === 0) return '';
-
-	const allBadPct = stats.all_bad / stats.total;
-	if (allBadPct > 0.4) return 'Most voters found all the responses disappointing.';
-
-	const candidates = [
-		{ name: stats.model_A_name, votes: stats.A },
-		{ name: stats.model_B_name, votes: stats.B },
-		{ name: stats.model_C_name, votes: stats.C },
-		...(stats.model_D_name ? [{ name: stats.model_D_name, votes: stats.D ?? 0 }] : []),
-		...(stats.model_E_name ? [{ name: stats.model_E_name, votes: stats.E ?? 0 }] : [])
-	].sort((a, b) => b.votes - a.votes);
-
-	const winner = candidates[0];
-	const runnerUp = candidates[1];
-
-	if (winner.votes === 0) return '';
-
-	const pct = Math.round((winner.votes / stats.total) * 100);
-
-	if (pct > 60) {
-		return `${MODEL_LABELS[winner.name]} dominated with ${pct}% of the vote.`;
+	// graceful degradation if migration 004 hasn't been applied yet
+	if (!votes) {
+		const fallback = await supabase.from('votes').select('choice').eq('battle_id', battle.id);
+		votes = (fallback.data ?? []).map((v) => ({ ...v, score: null }));
 	}
 
-	return `${MODEL_LABELS[winner.name]} edged out ${MODEL_LABELS[runnerUp.name]} with ${pct}% of votes.`;
+	const fav: Partial<Record<Slot, number>> = {};
+	let players = 0;
+	let scored_players = 0;
+	const score_dist = [0, 0, 0, 0, 0, 0];
+
+	for (const v of votes ?? []) {
+		if (v.choice !== 'all_bad') {
+			const display = canonicalToDisplay(battle, v.choice as Slot);
+			fav[display] = (fav[display] ?? 0) + 1;
+			players++;
+		}
+		if (typeof v.score === 'number' && v.score >= 0 && v.score <= 5) {
+			score_dist[v.score]++;
+			scored_players++;
+		}
+	}
+
+	return { players, fav, scored_players, score_dist };
+}
+
+export interface IdentificationRow {
+	model: ModelName;
+	shown: number;
+	correct: number;
+	rate: number;
+	/** model it gets mistaken for the most */
+	mistakenFor: ModelName | null;
+	mistakenForCount: number;
+}
+
+/** How recognizable each model is: % of guesses that correctly tagged it */
+export async function getIdentificationStats(): Promise<IdentificationRow[]> {
+	const [{ data: battles }, { data: votes }] = await Promise.all([
+		supabase.from('battles').select('id, outputs'),
+		supabase.from('votes').select('battle_id, guesses').not('guesses', 'is', null)
+	]);
+
+	const battleModels = new Map<string, Partial<Record<Slot, ModelName>>>();
+	const outputKeys = ['modelA', 'modelB', 'modelC', 'modelD', 'modelE'] as const;
+	const slots: Slot[] = ['A', 'B', 'C', 'D', 'E'];
+
+	for (const b of battles ?? []) {
+		const outputs = b.outputs as Record<string, { model_id: string } | undefined>;
+		const map: Partial<Record<Slot, ModelName>> = {};
+		outputKeys.forEach((k, i) => {
+			const out = outputs[k];
+			if (out) map[slots[i]] = modelIdToName(out.model_id);
+		});
+		battleModels.set(b.id, map);
+	}
+
+	const tally: Record<ModelName, { shown: number; correct: number; confusion: Partial<Record<ModelName, number>> }> = {
+		claude: { shown: 0, correct: 0, confusion: {} },
+		chatgpt: { shown: 0, correct: 0, confusion: {} },
+		gemini: { shown: 0, correct: 0, confusion: {} },
+		grok: { shown: 0, correct: 0, confusion: {} },
+		perplexity: { shown: 0, correct: 0, confusion: {} }
+	};
+
+	for (const v of votes ?? []) {
+		const truth = battleModels.get(v.battle_id);
+		if (!truth) continue;
+		const guesses = v.guesses as Partial<Record<Slot, ModelName>>;
+		for (const [slot, actual] of Object.entries(truth) as [Slot, ModelName][]) {
+			const guessed = guesses[slot];
+			if (!guessed) continue;
+			tally[actual].shown++;
+			if (guessed === actual) tally[actual].correct++;
+			else tally[actual].confusion[guessed] = (tally[actual].confusion[guessed] ?? 0) + 1;
+		}
+	}
+
+	return (Object.entries(tally) as [ModelName, (typeof tally)['claude']][])
+		.filter(([, t]) => t.shown > 0)
+		.map(([model, t]) => {
+			const topMistake = (Object.entries(t.confusion) as [ModelName, number][]).sort((a, b) => b[1] - a[1])[0];
+			return {
+				model,
+				shown: t.shown,
+				correct: t.correct,
+				rate: t.correct / t.shown,
+				mistakenFor: topMistake?.[0] ?? null,
+				mistakenForCount: topMistake?.[1] ?? 0
+			};
+		})
+		.sort((a, b) => b.rate - a.rate);
 }
 
 export async function getModelStandings(): Promise<StandingRow[]> {

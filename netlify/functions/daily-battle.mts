@@ -6,14 +6,17 @@ const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.PRIVATE_SUPABASE_SERVICE_ROLE_KEY!;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
 
+// Keep in sync with src/lib/server/openrouter.ts
 const MODEL_IDS = {
-	claude: 'anthropic/claude-sonnet-4-5',
-	chatgpt: 'openai/gpt-4o',
-	gemini: 'google/gemini-pro-1.5'
+	claude: 'anthropic/claude-opus-4.8',
+	chatgpt: 'openai/gpt-5.5',
+	gemini: 'google/gemini-3.1-pro-preview',
+	grok: 'x-ai/grok-4.3',
+	perplexity: 'perplexity/sonar-pro'
 } as const;
 
 const SYSTEM_PROMPT =
-	"You are a helpful assistant. Answer the user's prompt directly and concisely. Do not introduce yourself or mention your name.";
+	"Answer the user's prompt directly in under 120 words. Never state your name, your maker, or your model version.";
 
 type Category = keyof typeof PROMPTS;
 const CATEGORIES = Object.keys(PROMPTS) as Category[];
@@ -33,8 +36,8 @@ async function callModel(modelId: string, prompt: string): Promise<string> {
 				{ role: 'system', content: SYSTEM_PROMPT },
 				{ role: 'user', content: prompt }
 			],
-			temperature: 0.7,
-			max_tokens: 300
+			temperature: 0.8,
+			max_tokens: 400
 		})
 	});
 
@@ -85,12 +88,22 @@ export default async () => {
 	const pool = candidates.length > 0 ? candidates : PROMPTS[category];
 	const prompt = pool[Math.floor(Math.random() * pool.length)];
 
-	// Generate all 3 outputs in parallel
-	const [claudeText, chatgptText, geminiText] = await Promise.all([
+	// Generate all 5 outputs in parallel
+	const [claudeText, chatgptText, geminiText, grokText, perplexityText] = await Promise.all([
 		callModel(MODEL_IDS.claude, prompt),
 		callModel(MODEL_IDS.chatgpt, prompt),
-		callModel(MODEL_IDS.gemini, prompt)
+		callModel(MODEL_IDS.gemini, prompt),
+		callModel(MODEL_IDS.grok, prompt),
+		callModel(MODEL_IDS.perplexity, prompt)
 	]);
+
+	const texts = { claudeText, chatgptText, geminiText, grokText, perplexityText };
+	for (const [name, text] of Object.entries(texts)) {
+		if (!text.trim()) {
+			console.error(`Empty output from ${name}, aborting`);
+			return new Response(`Empty output from ${name}`, { status: 500 });
+		}
+	}
 
 	const { data: battle, error } = await supabase
 		.from('battles')
@@ -100,7 +113,9 @@ export default async () => {
 			outputs: {
 				modelA: { text: claudeText, model_id: MODEL_IDS.claude },
 				modelB: { text: chatgptText, model_id: MODEL_IDS.chatgpt },
-				modelC: { text: geminiText, model_id: MODEL_IDS.gemini }
+				modelC: { text: geminiText, model_id: MODEL_IDS.gemini },
+				modelD: { text: grokText, model_id: MODEL_IDS.grok },
+				modelE: { text: perplexityText, model_id: MODEL_IDS.perplexity }
 			},
 			is_daily: true,
 			battle_date: today

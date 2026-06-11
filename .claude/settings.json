@@ -3,7 +3,33 @@
     "allow": [
       "PowerShell(gh --version)",
       "PowerShell(node --version)",
-      "PowerShell(npm --version)"
+      "PowerShell(npm --version)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx tsc *)",
+      "PowerShell(Get-ChildItem -Recurse src | Where-Object { -not $_.PSIsContainer } | Select-Object FullName, Length)",
+      "PowerShell(git -C C:\\\\Users\\\\mverhill\\\\Documents\\\\guess status)",
+      "PowerShell(git -C C:\\\\Users\\\\mverhill\\\\Documents\\\\guess log --oneline -10)",
+      "PowerShell(Get-ChildItem -Recurse scripts, netlify, supabase | Where-Object { -not $_.PSIsContainer } | Select-Object FullName)",
+      "PowerShell($models = \\(Invoke-RestMethod -Uri 'https://openrouter.ai/api/v1/models'\\).data; $models | Where-Object { $_.id -match '^\\(anthropic|openai|google|x-ai|perplexity\\)/' } | Sort-Object created -Descending | Select-Object -First 40 id, name | Format-Table -AutoSize)",
+      "PowerShell($models = \\(Invoke-RestMethod -Uri 'https://openrouter.ai/api/v1/models'\\).data; $models | Where-Object { $_.id -match '^perplexity/' } | Select-Object id, name | Format-Table -AutoSize)",
+      "PowerShell(npm run check)",
+      "PowerShell(Remove-Item \"src\\\\lib\\\\components\\\\ModelButton.svelte\" -Confirm:$false)",
+      "PowerShell(npm run build)",
+      "PowerShell(npm run dev)",
+      "PowerShell(Start-Sleep -Seconds 6; $r = Invoke-WebRequest -Uri 'http://localhost:5173/' -UseBasicParsing; \"HOME: $\\($r.StatusCode\\)\"; if \\($r.Content -match 'Tag who wrote what|Daily battle'\\) { \"homepage game copy: OK\" }; $r2 = Invoke-WebRequest -Uri 'http://localhost:5173/leaderboard' -UseBasicParsing; \"LEADERBOARD: $\\($r2.StatusCode\\)\"; $r3 = Invoke-WebRequest -Uri 'http://localhost:5173/faq' -UseBasicParsing; \"FAQ: $\\($r3.StatusCode\\)\")",
+      "PowerShell($r = Invoke-WebRequest -Uri 'http://localhost:5173/' -UseBasicParsing; $m = [regex]::Matches\\($r.Content, '/battle/\\([0-9a-f-]{36}\\)'\\); $m[0].Groups[1].Value)",
+      "PowerShell($body = @{ battle_id = '75cf873a-1fc2-4afb-814a-4b9a01ae3c33'; fingerprint = 'claude-e2e-test-delete-me'; favorite = 'A'; guesses = @{ A='claude'; B='chatgpt'; C='gemini'; D='grok'; E='perplexity' } } | ConvertTo-Json; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/vote' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content)",
+      "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; $check = Invoke-RestMethod -Uri \"$url/rest/v1/votes?fingerprint=eq.claude-e2e-test-delete-me&select=id,choice\" -Headers $h; \"test votes found: $\\($check.Count\\)\"; if \\($check.Count -gt 0\\) { Invoke-RestMethod -Uri \"$url/rest/v1/votes?fingerprint=eq.claude-e2e-test-delete-me\" -Method DELETE -Headers $h; \"deleted\" })",
+      "PowerShell($body = @{ battle_id = '75cf873a-1fc2-4afb-814a-4b9a01ae3c33'; fingerprint = 'claude-e2e-test-delete-me-2'; favorite = 'B'; guesses = @{ A='grok'; B='chatgpt'; C='claude'; D='perplexity'; E='gemini' } } | ConvertTo-Json; $r = Invoke-WebRequest -Uri 'http://localhost:5173/api/vote' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing; \"STATUS: $\\($r.StatusCode\\)\"; $r.Content)",
+      "PowerShell($env_lines = Get-Content .env; $url = \\($env_lines | Where-Object { $_ -match '^PUBLIC_SUPABASE_URL=' }\\) -replace '^PUBLIC_SUPABASE_URL=',''; $key = \\($env_lines | Where-Object { $_ -match '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=' }\\) -replace '^PRIVATE_SUPABASE_SERVICE_ROLE_KEY=',''; $h = @{ apikey = $key; Authorization = \"Bearer $key\" }; Invoke-RestMethod -Uri \"$url/rest/v1/votes?fingerprint=eq.claude-e2e-test-delete-me-2\" -Method DELETE -Headers $h; \"test vote deleted\")",
+      "PowerShell(npm run check 2>$null; \"check exit: $LASTEXITCODE\")",
+      "PowerShell(git add -A)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\mverhill\\.claude\\projects\\c--Users-mverhill-Documents-guess"
     ]
   }
 }

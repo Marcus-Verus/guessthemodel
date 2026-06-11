@@ -5,10 +5,10 @@
 	import StatsRow from '$lib/components/StatsRow.svelte';
 	import StreakBadge from '$lib/components/StreakBadge.svelte';
 	import ModelStandings from '$lib/components/ModelStandings.svelte';
+	import Countdown from '$lib/components/Countdown.svelte';
 	import { CATEGORY_LABELS } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
-
 </script>
 
 <svelte:head>
@@ -24,7 +24,7 @@
 	<meta property="og:image" content={data.meta.ogImage} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="GuessTheModel — Vote blind on AI outputs" />
+	<meta property="og:image:alt" content="GuessTheModel — the daily AI guessing game" />
 
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={data.meta.title} />
@@ -32,47 +32,35 @@
 	<meta name="twitter:image" content={data.meta.ogImage} />
 </svelte:head>
 
-<div class="mx-auto max-w-6xl px-4 sm:px-6 py-10">
+<div class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
 
-	<!-- Hero -->
-	<div class="mb-10">
-		<h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight mb-3">
-			Can you tell which <em class="text-[#C3F73A] not-italic">AI wrote this?</em>
-		</h1>
-		<p class="text-[#8B949E] text-base">
-			5 models. Same prompt. No names. Vote blind.
-		</p>
-	</div>
-
-	<!-- Personal streak (client-only, reads localStorage) -->
-	<StreakBadge />
-
-	<!-- Stats + Benchmark -->
-	<div class="mb-10 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-		<StatsRow stats={data.stats} />
-		<ModelStandings rows={data.standings} totalBattles={data.stats.battles_run} />
-	</div>
-
-	<!-- Today's battle -->
-	{#if data.daily}
-		<div class="mb-12">
-			<div class="flex items-center gap-3 mb-4">
-				<p class="label">Today's battle</p>
+	<!-- Slim hero — the game is the hero -->
+	<div class="mb-6">
+		<div class="flex items-center gap-3 flex-wrap mb-3">
+			{#if data.battleNumber > 0}
+				<span class="label">Daily battle #{data.battleNumber}</span>
+			{:else}
+				<span class="label">Daily battle</span>
+			{/if}
+			{#if data.daily}
 				<span class="text-xs px-2 py-0.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A]">
 					{CATEGORY_LABELS[data.daily.category]}
 				</span>
-				{#if data.battleNumber > 0}
-					<span class="text-xs text-[#6E7681] ml-auto">#{data.battleNumber}</span>
-				{/if}
-			</div>
+			{/if}
+			<span class="ml-auto"><Countdown /></span>
+		</div>
+		<h1 class="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2">
+			Can you tell <em class="text-[#C3F73A] not-italic">which AI wrote it?</em>
+		</h1>
+		<StreakBadge />
+	</div>
+
+	<!-- Today's battle — front and center -->
+	{#if data.daily}
+		<div class="mb-12">
 			<div class="card p-5 sm:p-6">
-				<BattleFlow battle={data.daily} />
+				<BattleFlow battle={data.daily} battleNumber={data.battleNumber} />
 			</div>
-			<p class="mt-2">
-				<a href="/battle/{data.daily.id}" class="text-[#6E7681] hover:text-[#8B949E] text-xs transition-colors">
-					Permanent link →
-				</a>
-			</p>
 		</div>
 	{:else}
 		<div class="mb-12 card p-10 text-center">
@@ -80,12 +68,19 @@
 		</div>
 	{/if}
 
-	<!-- Category nav + more battles -->
+	<!-- Stats + benchmark -->
+	<div class="mb-12 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+		<StatsRow stats={data.stats} />
+		<ModelStandings rows={data.standings} totalBattles={data.stats.battles_run} />
+	</div>
+
+	<!-- Category nav + past battles -->
 	<div class="mb-6">
 		<CategoryNav active="all" />
 	</div>
 
 	{#if data.recent.filter(b => b.id !== data.daily?.id).length > 0}
+		<p class="label mb-3">Play the archive</p>
 		<div class="grid gap-3">
 			{#each data.recent.filter(b => b.id !== data.daily?.id) as battle}
 				<a
@@ -113,7 +108,7 @@
 
 	<!-- Footer -->
 	<div class="mt-12 pt-6 border-t border-[#21262D] flex flex-wrap items-center justify-between gap-4">
-		<p class="text-[#6E7681] text-xs">The social human benchmark for AI.</p>
+		<p class="text-[#6E7681] text-xs">The daily game that benchmarks AI with human eyes.</p>
 		<div class="flex items-center gap-5 text-xs text-[#6E7681]">
 			<a href="/weekly" class="hover:text-[#8B949E] transition-colors">Weekly</a>
 			<a href="/leaderboard" class="hover:text-[#8B949E] transition-colors">Leaderboard</a>

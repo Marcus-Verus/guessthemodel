@@ -1,251 +1,219 @@
 <script lang="ts">
-	import type { SafeBattle, ModelName, RevealPayload, VoteChoice } from '$lib/types';
-	import { MODEL_LABELS, MODEL_VERSION_LABELS, BATTLE_MODELS } from '$lib/types';
+	import type { SafeBattle, ModelName, RevealPayload, Slot, GuessMap } from '$lib/types';
+	import { MODEL_LABELS, MODEL_VERSION_LABELS, BATTLE_MODELS, ALL_SLOTS } from '$lib/types';
+	import type { GameRecord } from '$lib/game';
+	import { loadHistory, recordGame, computeStreaks, scoreTitle, buildShareText } from '$lib/game';
 	import ModelLogo from './ModelLogo.svelte';
+	import Confetti from './Confetti.svelte';
+	import Countdown from './Countdown.svelte';
+	import StatsModal from './StatsModal.svelte';
 
-	let { battle }: { battle: SafeBattle } = $props();
+	let { battle, battleNumber = 0 }: { battle: SafeBattle; battleNumber?: number } = $props();
 
-	interface VoteHistoryEntry {
-		date: string;
-		battle_id: string;
-		choice: VoteChoice;
-		picked_model_name: ModelName | null;
-		picked_winner: boolean;
-	}
+	// ── game state ───────────────────────────────────────────────
 
-	// ── utils ─────────────────────────────────────────────────────
+	const slots = $derived(
+		ALL_SLOTS.filter((s) => (battle.outputs as Record<string, unknown>)[`model${s}`])
+	);
 
-	function seededShuffle<T>(arr: T[], seed: number): T[] {
-		const a = [...arr];
-		let s = seed >>> 0;
-		for (let i = a.length - 1; i > 0; i--) {
-			s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-			[a[i], a[s % (i + 1)]] = [a[s % (i + 1)], a[i]];
-		}
-		return a;
-	}
-
-	function truncateWords(text: string, max: number): string {
-		const words = text.trim().split(/\s+/);
-		return words.length <= max ? text : words.slice(0, max).join(' ') + '…';
-	}
-
-	function computeStreak(history: VoteHistoryEntry[]): number {
-		const dates = new Set(history.map(v => v.date));
-		let streak = 0;
-		const d = new Date();
-		while (true) {
-			const ds = d.toISOString().slice(0, 10);
-			if (dates.has(ds)) { streak++; d.setDate(d.getDate() - 1); }
-			else break;
-		}
-		return streak;
-	}
-
-	function computeBias(history: VoteHistoryEntry[]): string {
-		const withModel = history.filter(h => h.picked_model_name);
-		if (withModel.length < 8) return '';
-		const counts: Partial<Record<ModelName, number>> = {};
-		for (const h of withModel) {
-			if (h.picked_model_name) counts[h.picked_model_name] = (counts[h.picked_model_name] ?? 0) + 1;
-		}
-		const sorted = (Object.entries(counts) as [ModelName, number][]).sort((a, b) => b[1] - a[1]);
-		if (!sorted.length) return '';
-		const [top, n] = sorted[0];
-		const biasP = Math.round(n / withModel.length * 100);
-		if (biasP < 40) return '';
-		return `You tend to pick ${MODEL_LABELS[top]} responses (${biasP}% of the time).`;
-	}
-
-	// ── state ─────────────────────────────────────────────────────
-
-	const slotCount = $derived(battle.outputs.modelD ? 5 : 3);
-
-	let revealed = $state(false);
+	let guesses = $state<GuessMap>({});
+	let favorite = $state<Slot | null>(null);
 	let loading = $state(false);
-	let choice = $state<VoteChoice | null>(null);
+	let submitError = $state('');
+
 	let revealData = $state<RevealPayload | null>(null);
-	let pairOrder = $state<[VoteChoice, VoteChoice]>(['A', 'B']);
-	let fingerprint = $state('');
+	let revealedCards = $state(0);
+	let showPanel = $state(false);
+	let showConfetti = $state(false);
+	let displayScore = $state(0);
 
-	let expandedLeft = $state(false);
-	let expandedRight = $state(false);
-	let showFullResults = $state(false);
+	let expanded = $state<Partial<Record<Slot, boolean>>>({});
 	let copied = $state(false);
-	let challengeCopied = $state(false);
+	let statsOpen = $state(false);
 
-	let voteHistory = $state<VoteHistoryEntry[]>([]);
+	let fingerprint = $state('');
+	let history = $state<GameRecord[]>([]);
 	let streak = $state(0);
-	let biasInsight = $state('');
-	let accuracy = $state<{ wins: number; total: number; pct: number } | null>(null);
 
 	let emailInput = $state('');
 	let emailSubmitted = $state(false);
 	let emailLoading = $state(false);
 	let alreadySubscribed = $state(false);
 
-	// ── init ──────────────────────────────────────────────────────
+	let panelEl = $state<HTMLElement | null>(null);
+
+	const allTagged = $derived(slots.every((s) => guesses[s]));
+	const taggedCount = $derived(slots.filter((s) => guesses[s]).length);
+	const canLock = $derived(allTagged && favorite !== null && !loading);
+	const revealed = $derived(revealData !== null);
+
+	// ── init ─────────────────────────────────────────────────────
 
 	$effect(() => {
 		let fp = localStorage.getItem('gtm_fp');
-		if (!fp) { fp = crypto.randomUUID(); localStorage.setItem('gtm_fp', fp); }
+		if (!fp) {
+			fp = crypto.randomUUID();
+			localStorage.setItem('gtm_fp', fp);
+		}
 		fingerprint = fp;
 
-		const hash = [...(fp + battle.id)].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-		const allSlots: VoteChoice[] = slotCount === 5 ? ['A', 'B', 'C', 'D', 'E'] : ['A', 'B', 'C'];
-		const shuffled = seededShuffle(allSlots, hash);
-		pairOrder = [shuffled[0], shuffled[1]];
-
 		alreadySubscribed = !!localStorage.getItem('gtm_subscribed');
+		history = loadHistory();
+		streak = computeStreaks(history).current;
 
-		try {
-			const raw = localStorage.getItem('gtm_history');
-			const history: VoteHistoryEntry[] = raw ? JSON.parse(raw) : [];
-			voteHistory = history;
-			streak = computeStreak(history);
-			biasInsight = computeBias(history);
-			if (history.length >= 5) {
-				const wins = history.filter(h => h.picked_winner).length;
-				accuracy = { wins, total: history.length, pct: Math.round(wins / history.length * 100) };
-			}
-		} catch { /* ignore */ }
-
-		const cached = localStorage.getItem(`gtm_vote_${battle.id}`);
+		// already played this battle? restore the reveal without ceremony
+		const cached = localStorage.getItem(`gtm_v2_vote_${battle.id}`);
 		if (cached) {
 			try {
-				const p = JSON.parse(cached);
+				const p: RevealPayload = JSON.parse(cached);
 				revealData = p;
-				choice = p.your_choice;
-				if (p.pair_left && p.pair_right) pairOrder = [p.pair_left, p.pair_right];
-				revealed = true;
-			} catch { /* ignore */ }
+				guesses = p.your_guesses;
+				favorite = p.your_favorite;
+				revealedCards = slots.length;
+				displayScore = p.score;
+				showPanel = true;
+			} catch {
+				/* ignore */
+			}
 		}
 	});
 
-	// ── helpers ───────────────────────────────────────────────────
+	// ── tagging ──────────────────────────────────────────────────
 
-	function getOutput(slot: VoteChoice): { text: string } {
-		if (slot === 'all_bad') return battle.outputs.modelA;
-		return (battle.outputs as Record<string, { text: string }>)[`model${slot}`] ?? battle.outputs.modelA;
+	function tag(slot: Slot, model: ModelName) {
+		if (revealed || loading) return;
+		const next: GuessMap = { ...guesses };
+		// a model can only be used once — steal it from wherever it was
+		for (const s of slots) {
+			if (next[s] === model) delete next[s];
+		}
+		next[slot] = model;
+		guesses = next;
 	}
 
-	function getModelName(slot: VoteChoice): ModelName {
-		if (!revealData || slot === 'all_bad') return 'claude';
-		const m: Record<string, ModelName | undefined> = {
-			A: revealData.model_A_name, B: revealData.model_B_name, C: revealData.model_C_name,
-			D: revealData.model_D_name, E: revealData.model_E_name
-		};
-		return m[slot] ?? 'claude';
+	function usedElsewhere(slot: Slot, model: ModelName): boolean {
+		return slots.some((s) => s !== slot && guesses[s] === model);
 	}
 
-	function getModelId(slot: VoteChoice): string {
-		if (!revealData || slot === 'all_bad') return '';
-		const m: Record<string, string | undefined> = {
-			A: revealData.model_A_id, B: revealData.model_B_id, C: revealData.model_C_id,
-			D: revealData.model_D_id, E: revealData.model_E_id
-		};
-		return m[slot] ?? '';
-	}
+	// ── submit + cinematic reveal ────────────────────────────────
 
-	function pct(n: number, total: number) {
-		return total === 0 ? 0 : Math.round(n / total * 100);
-	}
-
-	function slotVotes(slot: VoteChoice): number {
-		if (!revealData) return 0;
-		const { stats } = revealData;
-		if (slot === 'all_bad') return stats.all_bad;
-		return ({ A: stats.A, B: stats.B, C: stats.C, D: stats.D ?? 0, E: stats.E ?? 0 } as Record<string, number>)[slot] ?? 0;
-	}
-
-	const otherSlot = $derived<VoteChoice>(choice === pairOrder[0] ? pairOrder[1] : pairOrder[0]);
-
-	const pickedWinner = $derived(
-		revealed && revealData && choice && choice !== 'all_bad'
-			? slotVotes(choice) > slotVotes(otherSlot)
-			: false
-	);
-
-	function verdictMessage(): string {
-		if (!revealData || !choice) return '';
-		if (choice === 'all_bad') return 'You called it — neither impressed you.';
-		const myModel = MODEL_LABELS[getModelName(choice)];
-		const myV = slotVotes(choice);
-		const otherV = slotVotes(otherSlot);
-		const total = myV + otherV;
-		if (pickedWinner) return `You picked ${myModel} — the crowd agreed (${pct(myV, total)}%)`;
-		return `You picked ${myModel} — the crowd preferred ${MODEL_LABELS[getModelName(otherSlot)]} (${pct(otherV, total)}%)`;
-	}
-
-	// ── actions ───────────────────────────────────────────────────
-
-	async function handleVote(slot: VoteChoice | 'all_bad') {
-		if (loading || revealed) return;
-		choice = slot;
+	async function lockIn() {
+		if (!canLock || revealed) return;
 		loading = true;
+		submitError = '';
 
 		try {
 			const res = await fetch('/api/vote', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ battle_id: battle.id, choice: slot, fingerprint })
+				body: JSON.stringify({ battle_id: battle.id, fingerprint, favorite, guesses })
 			});
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error || 'Vote failed');
+			const data: RevealPayload = await res.json();
+			if (!res.ok) throw new Error((data as unknown as { message?: string }).message || 'Something broke');
 
-			revealData = data;
-			localStorage.setItem(`gtm_vote_${battle.id}`, JSON.stringify({
-				...data, pair_left: pairOrder[0], pair_right: pairOrder[1]
-			}));
+			localStorage.setItem(`gtm_v2_vote_${battle.id}`, JSON.stringify(data));
 
-			if (!voteHistory.some(h => h.battle_id === battle.id)) {
-				const today = new Date().toISOString().slice(0, 10);
-				let picked_model_name: ModelName | null = null;
-				if (slot !== 'all_bad') {
-					const nm: Record<string, ModelName | undefined> = {
-						A: data.model_A_name, B: data.model_B_name, C: data.model_C_name,
-						D: data.model_D_name, E: data.model_E_name
-					};
-					picked_model_name = nm[slot] ?? null;
-				}
-				const lv = (data.stats as Record<string, number>)[pairOrder[0]] ?? 0;
-				const rv = (data.stats as Record<string, number>)[pairOrder[1]] ?? 0;
-				const picked_winner = slot === pairOrder[0] ? lv > rv : slot === pairOrder[1] ? rv > lv : false;
+			const today = new Date().toISOString().slice(0, 10);
+			history = recordGame({ date: today, battle_id: battle.id, score: data.score, out_of: data.out_of });
+			streak = computeStreaks(history).current;
 
-				const newHistory = [...voteHistory, { date: today, battle_id: battle.id, choice: slot, picked_model_name, picked_winner }].slice(-90);
-				voteHistory = newHistory;
-				streak = computeStreak(newHistory);
-				biasInsight = computeBias(newHistory);
-				if (newHistory.length >= 5) {
-					const wins = newHistory.filter(h => h.picked_winner).length;
-					accuracy = { wins, total: newHistory.length, pct: Math.round(wins / newHistory.length * 100) };
-				}
-				localStorage.setItem('gtm_history', JSON.stringify(newHistory));
-			}
-
-			revealed = true;
-		} catch {
-			// still reveal so user isn't stuck
-			revealed = true;
-		} finally {
+			playReveal(data);
+		} catch (e) {
+			submitError = e instanceof Error ? e.message : 'Something broke — try again.';
 			loading = false;
 		}
 	}
 
-	async function copyShareText() {
-		if (!revealData || !choice) return;
-		const msg = verdictMessage();
-		const promptSnip = battle.prompt.length > 60 ? battle.prompt.slice(0, 60).trimEnd() + '…' : battle.prompt;
-		const lines = ['GuessTheModel', msg, `"${promptSnip}"`, `guessthemodel.com/battle/${battle.id}`];
-		await navigator.clipboard.writeText(lines.join('\n'));
-		copied = true;
-		setTimeout(() => (copied = false), 2000);
+	function playReveal(data: RevealPayload) {
+		revealData = data;
+		// the server is the source of truth — if this fingerprint already voted
+		// (another tab, another day), reflect the original submission
+		guesses = data.your_guesses;
+		favorite = data.your_favorite;
+		const stagger = 500;
+		slots.forEach((_, i) => {
+			setTimeout(() => (revealedCards = i + 1), 300 + i * stagger);
+		});
+		setTimeout(() => {
+			loading = false;
+			showPanel = true;
+			panelEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			if (data.score > 0) {
+				let c = 0;
+				const iv = setInterval(() => {
+					c++;
+					displayScore = Math.min(c, data.score);
+					if (c >= data.score) clearInterval(iv);
+				}, 160);
+			}
+			if (data.score === data.out_of) showConfetti = true;
+		}, 300 + slots.length * stagger + 350);
 	}
 
-	async function copyChallenge() {
-		await navigator.clipboard.writeText(`https://guessthemodel.com/battle/${battle.id}`);
-		challengeCopied = true;
-		setTimeout(() => (challengeCopied = false), 2000);
+	// ── reveal helpers ───────────────────────────────────────────
+
+	const correctBySlot = $derived.by(() => {
+		const map: Partial<Record<Slot, boolean>> = {};
+		if (!revealData) return map;
+		for (const s of slots) map[s] = revealData.your_guesses[s] === revealData.truth[s]?.name;
+		return map;
+	});
+
+	const correctArray = $derived(slots.map((s) => correctBySlot[s] ?? false));
+
+	const crowdFavoriteSlot = $derived.by(() => {
+		if (!revealData) return null;
+		const entries = Object.entries(revealData.crowd.fav) as [Slot, number][];
+		if (entries.length === 0) return null;
+		return entries.sort((a, b) => b[1] - a[1])[0][0];
+	});
+
+	function favPct(slot: Slot): number {
+		if (!revealData || revealData.crowd.players === 0) return 0;
+		return Math.round(((revealData.crowd.fav[slot] ?? 0) / revealData.crowd.players) * 100);
+	}
+
+	const beatPct = $derived.by(() => {
+		if (!revealData) return null;
+		const { score_dist, scored_players } = revealData.crowd;
+		if (scored_players < 5) return null;
+		const beaten = score_dist.slice(0, revealData.score).reduce((a, b) => a + b, 0);
+		return Math.round((beaten / scored_players) * 100);
+	});
+
+	const oddsLine = $derived.by(() => {
+		if (!revealData) return '';
+		const { score, out_of } = revealData;
+		if (score === out_of && out_of === 5) return 'Random tagging hits 5/5 once every 120 tries.';
+		if (score === out_of && out_of === 3) return 'Random tagging gets this right once every 6 tries.';
+		if (score === 0) return 'The models are officially indistinguishable to you. Most players land here.';
+		return '';
+	});
+
+	const title = $derived(revealData ? scoreTitle(revealData.score, revealData.out_of) : '');
+
+	// ── share ────────────────────────────────────────────────────
+
+	async function share() {
+		if (!revealData) return;
+		const text = buildShareText({
+			battleNumber,
+			score: revealData.score,
+			outOf: revealData.out_of,
+			correct: correctArray,
+			streak
+		});
+		if (navigator.share) {
+			try {
+				await navigator.share({ text });
+				return;
+			} catch {
+				/* user cancelled — fall through to clipboard */
+			}
+		}
+		await navigator.clipboard.writeText(text);
+		copied = true;
+		setTimeout(() => (copied = false), 2000);
 	}
 
 	async function handleEmailSubmit(e: SubmitEvent) {
@@ -253,229 +221,299 @@
 		if (!emailInput || emailLoading) return;
 		emailLoading = true;
 		try {
-			await fetch('/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailInput }) });
+			await fetch('/api/subscribe', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: emailInput })
+			});
 			emailSubmitted = true;
 			localStorage.setItem('gtm_subscribed', '1');
-		} catch { /* silent */ } finally {
+		} catch {
+			/* silent */
+		} finally {
 			emailLoading = false;
 		}
 	}
+
+	function truncateWords(text: string, max: number): string {
+		const words = text.trim().split(/\s+/);
+		return words.length <= max ? text : words.slice(0, max).join(' ') + '…';
+	}
 </script>
 
+{#if showConfetti}
+	<Confetti />
+{/if}
 
-<!-- ══ PROMPT ══════════════════════════════════════════════════ -->
-<p class="text-white font-semibold text-base mb-1">Which response is better?</p>
-<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-5 text-sm text-[#8B949E] leading-relaxed">
-	"{battle.prompt}"
-</div>
+<StatsModal bind:open={statsOpen} {history} />
 
+<div class={revealed ? '' : 'pb-24'}>
 
-<!-- ══ CARDS ════════════════════════════════════════════════════ -->
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-	{#each [0, 1] as i}
-		{@const slot = pairOrder[i]}
-		{@const output = getOutput(slot)}
-		{@const isChosen = choice === slot}
-		{@const expanded = i === 0 ? expandedLeft : expandedRight}
-		{@const toggleExpand = () => { if (i === 0) expandedLeft = !expandedLeft; else expandedRight = !expandedRight; }}
-		{@const wordsLong = output.text.trim().split(/\s+/).length > 80}
+	<!-- ══ PROMPT ══════════════════════════════════════════════ -->
+	<p class="text-white font-semibold text-base mb-1">
+		{slots.length} answers. {slots.length} AIs. Tag who wrote what.
+	</p>
+	<div class="rounded-lg bg-[#21262D] border border-[#30363D] px-4 py-3 mb-2 text-sm text-[#E6EDF3] leading-relaxed">
+		"{battle.prompt}"
+	</div>
+	{#if !revealed}
+		<p class="text-[#6E7681] text-xs mb-5">
+			Same lineup, same order, for everyone today. Each model is used exactly once — star the best answer, then lock in.
+		</p>
+	{:else}
+		<div class="mb-5"></div>
+	{/if}
 
-		<div class="card flex flex-col p-4 transition-all duration-300
-			{revealed && isChosen ? 'border-[#C3F73A30]' : ''}
-			{revealed && !isChosen && choice !== 'all_bad' ? 'opacity-60' : ''}">
+	<!-- ══ RESPONSE CARDS ═══════════════════════════════════════ -->
+	<div class="space-y-3">
+		{#each slots as slot, i}
+			{@const output = (battle.outputs as Record<string, { text: string }>)[`model${slot}`]}
+			{@const isExpanded = expanded[slot] ?? false}
+			{@const wordsLong = output.text.trim().split(/\s+/).length > 70}
+			{@const isRevealed = revealedCards > i && revealData}
+			{@const truth = revealData?.truth[slot]}
+			{@const wasCorrect = correctBySlot[slot] ?? false}
+			{@const isCrowdFav = crowdFavoriteSlot === slot && (revealData?.crowd.players ?? 0) > 0}
 
-			<!-- Reveal header (animates in) -->
-			{#if revealed && revealData}
-				{@const modelN = getModelName(slot)}
-				{@const votes = slotVotes(slot)}
-				{@const otherV = slotVotes(i === 0 ? pairOrder[1] : pairOrder[0])}
-				{@const pairTot = votes + otherV}
-				{@const wins = votes > otherV}
+			<div
+				class="card p-4 transition-all duration-300
+				{isRevealed ? (wasCorrect ? 'border-[#C3F73A66]' : 'border-[#F8514940]') : ''}"
+			>
+				<!-- Card header -->
+				<div class="flex items-center justify-between mb-2">
+					<span class="text-[#6E7681] text-[10px] font-bold tracking-widest uppercase">Response {i + 1}</span>
+					{#if !revealed}
+						<button
+							onclick={() => (favorite = favorite === slot ? null : slot)}
+							class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold border transition-all
+							{favorite === slot
+								? 'border-[#C3F73A] bg-[#C3F73A15] text-[#C3F73A]'
+								: 'border-[#30363D] text-[#6E7681] hover:text-[#8B949E] hover:border-[#8B949E]'}"
+							aria-pressed={favorite === slot}
+						>
+							<svg width="11" height="11" viewBox="0 0 24 24" fill={favorite === slot ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+								<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+							</svg>
+							Best answer
+						</button>
+					{:else if revealData && favorite === slot}
+						<span class="text-[10px] font-bold text-[#C3F73A] tracking-widest uppercase">Your favorite</span>
+					{/if}
+				</div>
 
-				<div class="flex items-center justify-between mb-3 animate-fade-up">
-					<div class="flex items-center gap-2">
-						<ModelLogo model={modelN} size="md" />
-						<div class="min-w-0">
-							<p class="text-white text-sm font-semibold leading-tight">{MODEL_LABELS[modelN]}</p>
-							{#if MODEL_VERSION_LABELS[getModelId(slot)]}
-								<p class="text-[#6E7681] text-[10px]">{MODEL_VERSION_LABELS[getModelId(slot)]}</p>
+				<!-- Identity reveal (flips in one card at a time) -->
+				{#if isRevealed && truth}
+					<div class="animate-flip-in rounded-lg px-3 py-2.5 mb-3 flex items-center justify-between gap-2
+						{wasCorrect ? 'bg-[#C3F73A10] border border-[#C3F73A40]' : 'bg-[#F8514908] border border-[#F8514930]'}">
+						<div class="flex items-center gap-2.5 min-w-0">
+							<ModelLogo model={truth.name} size="md" />
+							<div class="min-w-0">
+								<p class="text-white text-sm font-bold leading-tight">{MODEL_LABELS[truth.name]}</p>
+								{#if MODEL_VERSION_LABELS[truth.model_id]}
+									<p class="text-[#6E7681] text-[10px]">{MODEL_VERSION_LABELS[truth.model_id]}</p>
+								{/if}
+							</div>
+						</div>
+						<div class="text-right shrink-0">
+							{#if wasCorrect}
+								<p class="text-[#C3F73A] text-xs font-bold">✓ You got it</p>
+							{:else}
+								<p class="text-[#F85149] text-xs font-bold">✗ You said {revealData ? MODEL_LABELS[revealData.your_guesses[slot] ?? 'claude'] : ''}</p>
+							{/if}
+							{#if (revealData?.crowd.players ?? 0) > 0}
+								<p class="text-[#6E7681] text-[10px] mt-0.5">
+									{favPct(slot)}% favorited{isCrowdFav ? ' · crowd favorite' : ''}
+								</p>
 							{/if}
 						</div>
 					</div>
-					<div class="flex flex-col items-end gap-0.5 shrink-0">
-						{#if isChosen}
-							<span class="text-[10px] font-bold text-[#C3F73A] tracking-widest uppercase">Your pick</span>
-						{/if}
-						{#if wins && pairTot > 0}
-							<span class="text-[10px] font-bold bg-[#C3F73A] text-[#0D1117] px-2 py-0.5 rounded-full whitespace-nowrap">crowd winner</span>
-						{/if}
+				{/if}
+
+				<!-- Response text -->
+				<p class="text-[#8B949E] text-sm leading-relaxed whitespace-pre-wrap {isExpanded ? '' : 'line-clamp-5'}">
+					{isExpanded ? output.text : truncateWords(output.text, 70)}
+				</p>
+				{#if wordsLong}
+					<button
+						onclick={() => (expanded = { ...expanded, [slot]: !isExpanded })}
+						class="mt-1.5 text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors"
+					>
+						{isExpanded ? '↑ Less' : '↓ Read full answer'}
+					</button>
+				{/if}
+
+				<!-- Tag chips (pre-reveal) -->
+				{#if !revealed}
+					<div class="mt-3.5 pt-3 border-t border-[#21262D]">
+						<div class="flex items-center justify-between gap-3 flex-wrap">
+							<div class="flex items-center gap-1.5">
+								{#each BATTLE_MODELS as model}
+									{@const here = guesses[slot] === model}
+									{@const elsewhere = usedElsewhere(slot, model)}
+									<button
+										onclick={() => tag(slot, model)}
+										disabled={loading}
+										title={MODEL_LABELS[model]}
+										aria-label="Tag as {MODEL_LABELS[model]}"
+										aria-pressed={here}
+										class="rounded-lg p-1.5 border transition-all
+										{here
+											? 'border-[#C3F73A] bg-[#C3F73A12] scale-110'
+											: elsewhere
+												? 'border-transparent opacity-30 hover:opacity-60'
+												: 'border-[#30363D] hover:border-[#8B949E] hover:scale-105'}"
+									>
+										<ModelLogo {model} size="sm" />
+									</button>
+								{/each}
+							</div>
+							<span class="text-xs {guesses[slot] ? 'text-[#C3F73A] font-medium' : 'text-[#6E7681]'}">
+								{guesses[slot] ? MODEL_LABELS[guesses[slot]!] : 'Who wrote this?'}
+							</span>
+						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
+		{/each}
+	</div>
 
-			<!-- Text (always visible) -->
-			<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap
-				{expanded ? '' : 'line-clamp-5'}">
-				{truncateWords(output.text, 80)}
-			</p>
-			{#if wordsLong}
-				<button onclick={toggleExpand} class="mt-1.5 text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors text-left">
-					{expanded ? '↑ Less' : '↓ More'}
-				</button>
-			{/if}
-
-			<!-- Vote button (pre-reveal) or bar (post-reveal) -->
-			{#if !revealed}
-				<button
-					onclick={() => handleVote(slot)}
-					disabled={loading}
-					class="mt-4 w-full rounded-lg border px-4 py-3 text-sm font-semibold transition-all disabled:cursor-wait
-					{loading && isChosen
-						? 'border-[#C3F73A40] bg-[#C3F73A08] text-[#C3F73A60]'
-						: 'border-[#30363D] bg-[#21262D] text-white hover:border-[#C3F73A] hover:bg-[#C3F73A10] hover:text-[#C3F73A]'}"
-				>
-					{#if loading && isChosen}
-						<span class="flex items-center justify-center gap-2">
-							<span class="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin"></span>
-							Voting...
-						</span>
-					{:else}
-						This is better
-					{/if}
-				</button>
-
-			{:else if revealData}
-				{@const votes = slotVotes(slot)}
-				{@const otherV = slotVotes(i === 0 ? pairOrder[1] : pairOrder[0])}
-				{@const pairTot = votes + otherV}
-				{@const wins = votes > otherV}
-				<div class="mt-4">
-					<div class="h-1.5 rounded-full bg-[#21262D] overflow-hidden">
-						<div class="h-full rounded-full {wins ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}"
-							style="width:{pct(votes, pairTot)}%"></div>
-					</div>
-					<p class="text-right text-xs font-medium tabular-nums mt-1 {wins ? 'text-[#C3F73A]' : 'text-[#6E7681]'}">
-						{pct(votes, pairTot)}%
+	<!-- ══ STICKY LOCK BAR (pre-reveal) ══════════════════════════ -->
+	{#if !revealed}
+		<div class="fixed bottom-0 inset-x-0 z-40 border-t border-[#30363D]" style="background:#0D1117f2;backdrop-filter:blur(12px)">
+			<div class="mx-auto max-w-6xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+				<div class="min-w-0">
+					<p class="text-white text-sm font-semibold tabular-nums">
+						{taggedCount}/{slots.length} tagged
+					</p>
+					<p class="text-[#6E7681] text-xs truncate">
+						{#if !allTagged}
+							Tag every response with a different AI
+						{:else if favorite === null}
+							Now star the best answer
+						{:else}
+							Ready — no take-backs
+						{/if}
 					</p>
 				</div>
-			{/if}
-		</div>
-	{/each}
-</div>
-
-<!-- Neither (pre-reveal only) -->
-{#if !revealed}
-	<div class="flex justify-center mb-2">
-		<button
-			onclick={() => handleVote('all_bad')}
-			disabled={loading}
-			class="text-xs text-[#6E7681] hover:text-[#F85149] transition-colors disabled:opacity-40"
-		>
-			Neither is good
-		</button>
-	</div>
-{/if}
-
-
-<!-- ══ POST-REVEAL ═══════════════════════════════════════════════ -->
-{#if revealed && revealData}
-	<div class="mt-5 animate-fade-up">
-
-		<!-- Verdict -->
-		<p class="text-white font-semibold text-base mb-1">{verdictMessage()}</p>
-
-		<!-- Accuracy -->
-		{#if accuracy}
-			<p class="text-[#6E7681] text-sm mb-1">
-				You've been right {accuracy.wins}/{accuracy.total} times ({accuracy.pct}%)
-			</p>
-		{/if}
-
-		<!-- Bias -->
-		{#if biasInsight}
-			<p class="text-[#6E7681] text-xs italic mb-3">{biasInsight}</p>
-		{/if}
-
-		<!-- Streak -->
-		{#if streak > 0}
-			<p class="text-[#C3F73A] text-sm font-medium mb-4">
-				{streak}-day streak{streak >= 7 ? ' · week strong' : ''}{streak >= 30 ? ' · legendary' : ''}
-			</p>
-		{/if}
-
-		<!-- Full results -->
-		<div class="mb-5">
-			<button
-				onclick={() => (showFullResults = !showFullResults)}
-				class="text-xs text-[#6E7681] hover:text-[#8B949E] transition-colors underline-offset-2 hover:underline"
-			>
-				{showFullResults ? 'Hide' : 'All 5 model results'}
-			</button>
-			{#if showFullResults}
-				{@const allKeys = (['A', 'B', 'C', ...(battle.outputs.modelD ? ['D'] : []), ...(battle.outputs.modelE ? ['E'] : [])] as VoteChoice[])}
-				<div class="mt-3 space-y-3">
-					{#each allKeys as slot}
-						{@const m = getModelName(slot)}
-						{@const v = slotVotes(slot)}
-						{@const t = revealData.stats.total}
-						<div class="flex items-center gap-3">
-							<ModelLogo model={m} size="sm" />
-							<div class="flex-1">
-								<div class="flex justify-between text-xs mb-1">
-									<span class="text-white">{MODEL_LABELS[m]}</span>
-									<span class="text-[#6E7681] tabular-nums">{pct(v, t)}%</span>
-								</div>
-								<div class="h-1 rounded-full bg-[#21262D] overflow-hidden">
-									<div class="h-full rounded-full bg-[#30363D]" style="width:{pct(v, t)}%"></div>
-								</div>
-							</div>
-						</div>
-					{/each}
-					<p class="text-[#6E7681] text-xs">{revealData.stats.total} vote{revealData.stats.total !== 1 ? 's' : ''} total</p>
-				</div>
-			{/if}
-		</div>
-
-		<!-- Share -->
-		<div class="flex flex-wrap gap-2 mb-5">
-			<button
-				onclick={copyShareText}
-				class="rounded-md border px-4 py-2 text-sm font-medium transition-all
-				{copied ? 'border-[#3FB950] text-[#3FB950]' : 'border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#8B949E]'}"
-			>
-				{copied ? 'Copied!' : 'Share result'}
-			</button>
-			<button
-				onclick={copyChallenge}
-				class="rounded-md border px-4 py-2 text-sm font-medium transition-all
-				{challengeCopied ? 'border-[#3FB950] text-[#3FB950]' : 'border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#8B949E]'}"
-			>
-				{challengeCopied ? 'Link copied!' : 'Challenge a friend'}
-			</button>
-		</div>
-
-		<!-- Email -->
-		{#if !emailSubmitted && !alreadySubscribed}
-			<div class="card p-4 mb-5">
-				<p class="text-white font-medium text-sm mb-0.5">Get tomorrow's battle</p>
-				<p class="text-[#6E7681] text-xs mb-3">New battle daily. No spam.</p>
-				<form onsubmit={handleEmailSubmit} class="flex gap-2">
-					<input type="email" bind:value={emailInput} placeholder="you@example.com"
-						class="flex-1 min-w-0 bg-[#0D1117] border border-[#30363D] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#6E7681] focus:border-[#C3F73A] focus:outline-none transition-colors" />
-					<button type="submit" disabled={emailLoading}
-						class="rounded-md bg-[#C3F73A] px-4 py-2 text-sm font-medium text-[#0D1117] hover:bg-[#D4F85C] transition-colors shrink-0 disabled:opacity-50">
-						{emailLoading ? '…' : 'Notify me'}
-					</button>
-				</form>
+				<button
+					onclick={lockIn}
+					disabled={!canLock}
+					class="shrink-0 rounded-lg px-6 py-3 text-sm font-bold transition-all
+					{canLock
+						? 'bg-[#C3F73A] text-[#0D1117] hover:bg-[#D4F85C] animate-glow'
+						: 'bg-[#21262D] text-[#6E7681] cursor-not-allowed'}"
+				>
+					{#if loading}
+						<span class="flex items-center gap-2">
+							<span class="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin"></span>
+							Revealing…
+						</span>
+					{:else}
+						Lock it in
+					{/if}
+				</button>
 			</div>
-		{:else if emailSubmitted}
-			<p class="text-[#C3F73A] text-sm mb-5">You're in. Tomorrow's battle lands in your inbox.</p>
+		</div>
+		{#if submitError}
+			<p class="mt-4 text-[#F85149] text-sm animate-shake">{submitError} <button onclick={lockIn} class="underline underline-offset-2 hover:text-white transition-colors">Retry</button></p>
 		{/if}
+	{/if}
 
-		<a href="/"
-			class="inline-flex items-center gap-2 rounded-lg bg-[#C3F73A] px-5 py-2.5 text-sm font-bold text-[#0D1117] hover:bg-[#A8D428] transition-colors">
-			Next battle →
-		</a>
+	<!-- ══ RESULT PANEL ══════════════════════════════════════════ -->
+	{#if showPanel && revealData}
+		<div bind:this={panelEl} class="mt-6 animate-fade-up">
+			<div class="card p-6 sm:p-8 text-center relative overflow-hidden
+				{revealData.score === revealData.out_of ? 'border-[#C3F73A]' : ''}">
 
-	</div>
-{/if}
+				<p class="label mb-3">{battleNumber ? `Battle #${battleNumber}` : 'Result'}</p>
+
+				<p class="font-black tabular-nums leading-none mb-2 animate-pop
+					{revealData.score === revealData.out_of ? 'text-[#C3F73A]' : 'text-white'}"
+					style="font-size:64px">
+					{displayScore}<span class="text-[#6E7681] text-3xl font-bold">/{revealData.out_of}</span>
+				</p>
+
+				<p class="text-lg font-bold mb-4 {revealData.score === revealData.out_of ? 'text-[#C3F73A]' : revealData.score === 0 ? 'text-[#F85149]' : 'text-white'}">
+					{title}
+				</p>
+
+				<!-- Result grid (screenshot bait) -->
+				<div class="flex justify-center gap-1.5 mb-5">
+					{#each correctArray as c}
+						<div class="h-8 w-8 rounded-md {c ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}"></div>
+					{/each}
+				</div>
+
+				<!-- Context lines -->
+				<div class="space-y-1.5 mb-6 text-sm">
+					{#if beatPct !== null}
+						<p class="text-[#8B949E]">You beat <span class="text-white font-semibold">{beatPct}%</span> of today's players</p>
+					{/if}
+					{#if oddsLine}
+						<p class="text-[#6E7681] text-xs">{oddsLine}</p>
+					{/if}
+					{#if crowdFavoriteSlot && revealData.crowd.players > 1}
+						{@const cf = revealData.truth[crowdFavoriteSlot]}
+						{#if cf}
+							<p class="text-[#8B949E]">
+								Crowd's favorite answer: <span class="text-white font-semibold">{MODEL_LABELS[cf.name]}</span> ({favPct(crowdFavoriteSlot)}%)
+								{#if favorite === crowdFavoriteSlot}
+									— you agreed
+								{:else if favorite && revealData.truth[favorite]}
+									— you picked {MODEL_LABELS[revealData.truth[favorite]!.name]}
+								{/if}
+							</p>
+						{/if}
+					{/if}
+					{#if streak >= 2}
+						<p class="text-[#C3F73A] font-medium">{streak}-day streak{streak >= 7 ? ' · on fire' : ''}{streak >= 30 ? ' · legendary' : ''}</p>
+					{/if}
+				</div>
+
+				<!-- Actions -->
+				<div class="flex flex-wrap justify-center gap-2 mb-4">
+					<button
+						onclick={share}
+						class="rounded-lg px-6 py-3 text-sm font-bold transition-all
+						{copied ? 'bg-[#3FB950] text-[#0D1117]' : 'bg-[#C3F73A] text-[#0D1117] hover:bg-[#D4F85C]'}"
+					>
+						{copied ? 'Copied!' : 'Share your score'}
+					</button>
+					<button
+						onclick={() => (statsOpen = true)}
+						class="rounded-lg border border-[#30363D] px-6 py-3 text-sm font-medium text-[#8B949E] hover:text-white hover:border-[#8B949E] transition-all"
+					>
+						My stats
+					</button>
+				</div>
+
+				<Countdown />
+			</div>
+
+			<!-- Email -->
+			{#if !emailSubmitted && !alreadySubscribed}
+				<div class="card p-4 mt-4">
+					<p class="text-white font-medium text-sm mb-0.5">Don't break the streak</p>
+					<p class="text-[#6E7681] text-xs mb-3">Get tomorrow's battle in your inbox. No spam, ever.</p>
+					<form onsubmit={handleEmailSubmit} class="flex gap-2">
+						<input
+							type="email"
+							bind:value={emailInput}
+							placeholder="you@example.com"
+							class="flex-1 min-w-0 bg-[#0D1117] border border-[#30363D] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#6E7681] focus:border-[#C3F73A] focus:outline-none transition-colors"
+						/>
+						<button
+							type="submit"
+							disabled={emailLoading}
+							class="rounded-md bg-[#21262D] border border-[#30363D] px-4 py-2 text-sm font-medium text-white hover:border-[#C3F73A] transition-colors shrink-0 disabled:opacity-50"
+						>
+							{emailLoading ? '…' : 'Notify me'}
+						</button>
+					</form>
+				</div>
+			{:else if emailSubmitted}
+				<p class="text-[#C3F73A] text-sm mt-4 text-center">You're in. Tomorrow's battle lands in your inbox.</p>
+			{/if}
+		</div>
+	{/if}
+</div>
