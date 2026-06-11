@@ -14,6 +14,8 @@
 		picked_model: ModelName | null;
 		model_guess_correct: boolean | null;
 		crowd_prediction_correct: boolean | null;
+		picked_winner?: boolean;
+		battle_score?: number;
 	}
 
 	function seededShuffle<T>(arr: T[], seed: number): T[] {
@@ -84,7 +86,6 @@
 
 	const STEPS: Step[] = ['vote', 'guess', 'predict', 'reveal'];
 
-	// How many models does this battle have?
 	const slotCount = $derived(battle.outputs.modelD ? 5 : 3);
 
 	let step = $state<Step>('vote');
@@ -97,6 +98,7 @@
 	let fingerprint = $state('');
 	let positionOrder = $state<VoteChoice[]>(['A', 'B', 'C']);
 	let copied = $state(false);
+	let challengeCopied = $state(false);
 	let expandedCards = $state<Set<string>>(new Set());
 	let voteHistory = $state<VoteHistoryEntry[]>([]);
 	let streak = $state(0);
@@ -104,6 +106,7 @@
 	let emailInput = $state('');
 	let emailSubmitted = $state(false);
 	let emailLoading = $state(false);
+	let isFirstVisit = $state(false);
 
 	const stepIndex = $derived(STEPS.indexOf(step));
 
@@ -115,12 +118,14 @@
 		}
 		fingerprint = fp;
 
-		// Deterministic position shuffle per visitor+battle
 		const hash = [...(fp + battle.id)].reduce((acc, c) => acc + c.charCodeAt(0), 0);
 		const allSlots: VoteChoice[] = slotCount === 5 ? ['A', 'B', 'C', 'D', 'E'] : ['A', 'B', 'C'];
 		positionOrder = seededShuffle(allSlots, hash);
 
-		// Load vote history for streak + titles
+		if (!localStorage.getItem('gtm_visited')) {
+			isFirstVisit = true;
+		}
+
 		try {
 			const raw = localStorage.getItem('gtm_history');
 			const history: VoteHistoryEntry[] = raw ? JSON.parse(raw) : [];
@@ -131,7 +136,6 @@
 			// ignore corrupt cache
 		}
 
-		// Replay cached vote
 		const cached = localStorage.getItem(`gtm_vote_${battle.id}`);
 		if (cached) {
 			try {
@@ -176,7 +180,13 @@
 		return map[key] ?? '';
 	}
 
+	function dismissOnboarding() {
+		isFirstVisit = false;
+		localStorage.setItem('gtm_visited', '1');
+	}
+
 	function handleVote(position: number | 'all_bad') {
+		dismissOnboarding();
 		choice = position === 'all_bad' ? 'all_bad' : (positionOrder[position] as VoteChoice);
 		step = 'guess';
 	}
@@ -226,7 +236,6 @@
 				JSON.stringify({ ...data, model_guess: modelGuess, crowd_prediction: crowdPrediction })
 			);
 
-			// Save to vote history
 			const today = new Date().toISOString().slice(0, 10);
 			if (!voteHistory.some((h) => h.battle_id === battle.id)) {
 				let picked_model: ModelName | null = null;
@@ -240,13 +249,30 @@
 					};
 					picked_model = nameMap[choice] ?? null;
 				}
+
+				// Compute picked_winner for history
+				const c: Record<string, number> = {
+					A: data.stats?.A ?? 0, B: data.stats?.B ?? 0, C: data.stats?.C ?? 0,
+					D: data.stats?.D ?? 0, E: data.stats?.E ?? 0
+				};
+				const maxVotes = Math.max(...Object.values(c));
+				const tiedCount = Object.values(c).filter(v => v === maxVotes && maxVotes > 0).length;
+				const picked_winner = choice === 'all_bad'
+					? (data.stats?.all_bad ?? 0) > maxVotes
+					: tiedCount === 1 && c[choice] === maxVotes;
+				const bs = (picked_winner ? 1 : 0)
+					+ (data.model_guess_correct === true ? 1 : 0)
+					+ (data.crowd_prediction_correct === true ? 1 : 0);
+
 				const entry: VoteHistoryEntry = {
 					date: today,
 					battle_id: battle.id,
 					choice,
 					picked_model,
 					model_guess_correct: data.model_guess_correct,
-					crowd_prediction_correct: data.crowd_prediction_correct
+					crowd_prediction_correct: data.crowd_prediction_correct,
+					picked_winner,
+					battle_score: bs
 				};
 				const newHistory = [...voteHistory, entry].slice(-90);
 				voteHistory = newHistory;
@@ -279,20 +305,41 @@
 		return pct(counts[your_choice] ?? 0, stats.total);
 	}
 
+	function getScore(): { score: number; emojis: string; pickedWinner: boolean } {
+		if (!revealData) return { score: 0, emojis: '⬜⬜⬜', pickedWinner: false };
+		const { stats, model_guess_correct, crowd_prediction_correct, your_choice } = revealData;
+		let score = 0;
+		let pickedWinner = false;
+
+		const counts: Record<string, number> = {
+			A: stats.A, B: stats.B, C: stats.C, D: stats.D ?? 0, E: stats.E ?? 0
+		};
+		const maxV = Math.max(...Object.values(counts));
+
+		if (your_choice === 'all_bad') {
+			pickedWinner = (stats.all_bad ?? 0) > maxV;
+		} else {
+			const tiedCount = Object.values(counts).filter(v => v === maxV && maxV > 0).length;
+			pickedWinner = tiedCount === 1 && counts[your_choice] === maxV;
+		}
+		if (pickedWinner) score++;
+		const e1 = pickedWinner ? '🟩' : '🟥';
+
+		const e2 = model_guess_correct === null ? '⬜' : (model_guess_correct ? '🟩' : '🟥');
+		if (model_guess_correct === true) score++;
+
+		const e3 = crowd_prediction_correct === null ? '⬜' : (crowd_prediction_correct ? '🟩' : '🟥');
+		if (crowd_prediction_correct === true) score++;
+
+		return { score, emojis: `${e1}${e2}${e3}`, pickedWinner };
+	}
+
+	const scoreData = $derived(getScore());
+
 	async function copyShareText() {
 		if (!revealData) return;
-		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, your_choice, model_guess_correct } =
-			revealData;
-
-		let pickedLabel: string;
-		if (your_choice === 'all_bad') {
-			pickedLabel = 'None (all bad)';
-		} else {
-			pickedLabel = MODEL_LABELS[getModelName(your_choice)];
-		}
-
-		const guessLabel = modelGuess ? MODEL_LABELS[modelGuess] : 'skipped';
-		const beat = beatPercent();
+		const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name } = revealData;
+		const { score, emojis } = scoreData;
 
 		const allParts = [
 			{ label: MODEL_LABELS[model_A_name], v: pct(stats.A, stats.total) },
@@ -303,26 +350,21 @@
 		];
 		const parts = allParts.filter((p) => p.v > 0).map((p) => `${p.label} ${p.v}%`);
 
-		const promptSnippet = battle.prompt.length > 60
-			? battle.prompt.slice(0, 60).trimEnd() + '…'
+		const promptSnippet = battle.prompt.length > 55
+			? battle.prompt.slice(0, 55).trimEnd() + '…'
 			: battle.prompt;
 
-		let firstLine: string;
-		if (your_choice === 'all_bad') {
-			firstLine = `I said all 5 AIs were bad on this one 💀 ${beat}% agreed.`;
-		} else if (model_guess_correct === true) {
-			firstLine = `I correctly spotted ${pickedLabel} out of 5 AIs with no names shown 🎯 ${beat}% of voters picked the same.`;
-		} else if (model_guess_correct === false && modelGuess) {
-			firstLine = `I was convinced that was ${guessLabel}. It was ${pickedLabel} 😅 ${beat}% of voters picked the same.`;
-		} else {
-			firstLine = `I picked ${pickedLabel} as the best AI response — ${beat}% of voters agreed.`;
-		}
-
-		const text = `${firstLine}\n"${promptSnippet}"\n[${parts.join(' · ')}]\nguessthemodel.com/battle/${battle.id}`;
+		const text = `GuessTheModel 🤖\n${emojis} ${score}/3\n\n"${promptSnippet}"\n${parts.join(' · ')}\nguessthemodel.com/battle/${battle.id}`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
 		setTimeout(() => (copied = false), 2000);
+	}
+
+	async function copyChallenge() {
+		await navigator.clipboard.writeText(`https://guessthemodel.com/battle/${battle.id}`);
+		challengeCopied = true;
+		setTimeout(() => (challengeCopied = false), 2000);
 	}
 
 	function getChosenOutputText(): string {
@@ -354,7 +396,7 @@
 			emailSubmitted = true;
 			localStorage.setItem('gtm_subscribed', '1');
 		} catch {
-			// silent fail — don't block the user
+			// silent fail
 		} finally {
 			emailLoading = false;
 		}
@@ -387,6 +429,29 @@
 {#if step === 'vote'}
 	<!-- STEP 1: VOTE -->
 	<div class="animate-fade-up">
+
+		<!-- First-time onboarding banner -->
+		{#if isFirstVisit}
+			<div class="rounded-lg bg-[#161B22] border border-[#C3F73A30] px-4 py-3 mb-5">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<p class="text-white text-sm font-semibold mb-1">How it works</p>
+						<div class="flex flex-wrap items-center gap-2 text-[#8B949E] text-xs">
+							<span>📖 Read all responses</span>
+							<span class="text-[#30363D]">→</span>
+							<span>🗳️ Vote for the best</span>
+							<span class="text-[#30363D]">→</span>
+							<span>🤖 Reveal which AI wrote it</span>
+						</div>
+					</div>
+					<button
+						onclick={dismissOnboarding}
+						class="text-[#6E7681] hover:text-white text-xl leading-none shrink-0 mt-0.5"
+					>×</button>
+				</div>
+			</div>
+		{/if}
+
 		<div class="mb-6">
 			<p class="label mb-2">The prompt</p>
 			<p class="text-white text-base leading-relaxed bg-[#21262D] rounded-lg px-4 py-3 border border-[#30363D]">
@@ -516,6 +581,19 @@
 			{@const { stats, model_A_name, model_B_name, model_C_name, model_D_name, model_E_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
 			{@const maxVotes = Math.max(stats.A, stats.B, stats.C, stats.D ?? 0, stats.E ?? 0)}
 
+			<!-- Score card — Wordle-style, most prominent element -->
+			<div class="card p-5 mb-5 text-center bg-[#161B22] border-[#C3F73A20]">
+				<div class="text-4xl mb-2 tracking-widest leading-none">{scoreData.emojis}</div>
+				<div class="text-white font-bold text-2xl mb-1">
+					{scoreData.score}<span class="text-[#6E7681] font-normal">/3</span>
+				</div>
+				<div class="flex items-center justify-center gap-4 text-xs text-[#6E7681]">
+					<span class="{scoreData.pickedWinner ? 'text-[#C3F73A]' : ''}">crowd pick</span>
+					<span class="{model_guess_correct === true ? 'text-[#C3F73A]' : model_guess_correct === false ? '' : 'text-[#30363D]'}">AI identity</span>
+					<span class="{crowd_prediction_correct === true ? 'text-[#C3F73A]' : crowd_prediction_correct === false ? '' : 'text-[#30363D]'}">crowd prediction</span>
+				</div>
+			</div>
+
 			<!-- Model cards in original display order -->
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
 				{#each Array.from({ length: slotCount }, (_, i) => i) as pos}
@@ -592,28 +670,13 @@
 				</div>
 			{/if}
 
-			<!-- Scores -->
-			<div class="flex flex-wrap gap-3 mb-4">
-				{#if model_guess_correct !== null}
-					<div class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm
-						{model_guess_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#30363D] border border-[#30363D] text-[#6E7681]'}">
-						{model_guess_correct ? '✓' : '—'}
-						Model guess {model_guess_correct ? 'correct' : 'wrong'}
-					</div>
-				{/if}
-				{#if crowd_prediction_correct !== null}
-					<div class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm
-						{crowd_prediction_correct ? 'bg-[#3FB95015] border border-[#3FB950] text-[#3FB950]' : 'bg-[#30363D] border border-[#30363D] text-[#6E7681]'}">
-						{crowd_prediction_correct ? '✓' : '—'}
-						Crowd prediction {crowd_prediction_correct ? 'correct' : 'wrong'}
-					</div>
-				{/if}
-			</div>
-
 			<!-- Streak + titles -->
 			{#if streak > 0}
 				<div class="flex items-center gap-2 text-sm mb-3">
 					<span class="text-[#C3F73A] font-medium">🔥 {streak}-day streak</span>
+					{#if streak === 7}<span class="text-[#8B949E] text-xs">— one week strong</span>
+					{:else if streak === 30}<span class="text-[#8B949E] text-xs">— a whole month!</span>
+					{:else if streak >= 100}<span class="text-[#8B949E] text-xs">— legendary</span>{/if}
 				</div>
 			{/if}
 			{#if titles.length > 0}
@@ -630,50 +693,56 @@
 				<p class="text-[#8B949E] text-sm mb-5 italic">"{insight}"</p>
 			{/if}
 
-			<!-- Share card -->
+			<!-- Share card — Wordle-style -->
 			<div class="card p-4 mb-4 bg-[#21262D]">
-				<p class="label mb-2">Share your result</p>
-				<div class="font-mono text-sm text-[#C3F73A] leading-relaxed">
-					{#if choice !== 'all_bad' && choice !== null}
-						I picked {MODEL_LABELS[getModelName(choice)]}.{modelGuess ? ` Guessed ${MODEL_LABELS[modelGuess]}.` : ''} {beatPercent()}% of voters agreed.
-					{:else}
-						I said all were bad. {beatPercent()}% of voters agreed.
-					{/if}
+				<p class="label mb-3">Share your result</p>
+				<div class="font-mono text-sm text-[#C3F73A] leading-relaxed bg-[#0D1117] rounded-md px-4 py-3 border border-[#30363D]">
+					<span class="text-white">GuessTheModel</span> 🤖<br />
+					{scoreData.emojis} {scoreData.score}/3<br />
 					<br />
-					[{sharePartsStr()}]
-					<br />
+					<span class="text-[#8B949E]">"{battle.prompt.length > 55 ? battle.prompt.slice(0, 55).trimEnd() + '…' : battle.prompt}"</span><br />
+					{sharePartsStr()}<br />
 					guessthemodel.com/battle/{battle.id}
 				</div>
-				<button
-					onclick={copyShareText}
-					class="mt-3 rounded-md border border-[#30363D] px-3 py-1.5 text-xs font-medium transition-all
-					{copied ? 'border-[#3FB950] text-[#3FB950]' : 'text-[#8B949E] hover:text-white hover:border-[#8B949E]'}"
-				>
-					{copied ? 'Copied' : 'Copy result'}
-				</button>
+				<div class="flex flex-wrap gap-2 mt-3">
+					<button
+						onclick={copyShareText}
+						class="rounded-md border px-3 py-1.5 text-xs font-medium transition-all
+						{copied ? 'border-[#3FB950] text-[#3FB950]' : 'border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#8B949E]'}"
+					>
+						{copied ? '✓ Copied!' : 'Copy result'}
+					</button>
+					<button
+						onclick={copyChallenge}
+						class="rounded-md border px-3 py-1.5 text-xs font-medium transition-all
+						{challengeCopied ? 'border-[#3FB950] text-[#3FB950]' : 'border-[#30363D] text-[#8B949E] hover:text-white hover:border-[#8B949E]'}"
+					>
+						{challengeCopied ? '✓ Link copied!' : 'Challenge a friend →'}
+					</button>
+				</div>
 			</div>
 
 			<!-- Email capture -->
 			{#if !emailSubmitted && !localStorage.getItem('gtm_subscribed')}
-					<div class="card p-4 mb-4">
-						<p class="text-white font-medium text-sm mb-0.5">Get tomorrow's battle</p>
-						<p class="text-[#6E7681] text-xs mb-3">New battle every day. One email, no spam.</p>
-						<form onsubmit={handleEmailSubmit} class="flex gap-2">
-							<input
-								type="email"
-								bind:value={emailInput}
-								placeholder="you@example.com"
-								class="flex-1 min-w-0 bg-[#0D1117] border border-[#30363D] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#6E7681] focus:border-[#C3F73A] focus:outline-none transition-colors"
-							/>
-							<button
-								type="submit"
-								disabled={emailLoading}
-								class="rounded-md bg-[#C3F73A] px-4 py-2 text-sm font-medium text-[#0D1117] hover:bg-[#D4F85C] transition-colors shrink-0 disabled:opacity-50"
-							>
-								{emailLoading ? '…' : 'Notify me'}
-							</button>
-						</form>
-					</div>
+				<div class="card p-4 mb-4">
+					<p class="text-white font-medium text-sm mb-0.5">Get tomorrow's battle</p>
+					<p class="text-[#6E7681] text-xs mb-3">New battle every day. One email, no spam.</p>
+					<form onsubmit={handleEmailSubmit} class="flex gap-2">
+						<input
+							type="email"
+							bind:value={emailInput}
+							placeholder="you@example.com"
+							class="flex-1 min-w-0 bg-[#0D1117] border border-[#30363D] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#6E7681] focus:border-[#C3F73A] focus:outline-none transition-colors"
+						/>
+						<button
+							type="submit"
+							disabled={emailLoading}
+							class="rounded-md bg-[#C3F73A] px-4 py-2 text-sm font-medium text-[#0D1117] hover:bg-[#D4F85C] transition-colors shrink-0 disabled:opacity-50"
+						>
+							{emailLoading ? '…' : 'Notify me'}
+						</button>
+					</form>
+				</div>
 			{:else if emailSubmitted}
 				<p class="text-[#C3F73A] text-sm mb-4">✓ You're in. Tomorrow's battle lands in your inbox.</p>
 			{/if}

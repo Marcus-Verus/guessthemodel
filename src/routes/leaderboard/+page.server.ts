@@ -16,15 +16,26 @@ export interface LeaderboardRow {
 	voteShare: number;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
+	const categoryParam = url.searchParams.get('category');
+	const activeCategory: Category | 'all' = (categoryParam && CATEGORIES.includes(categoryParam as Category))
+		? (categoryParam as Category)
+		: 'all';
+
 	const [{ data: battles }, { data: votes }] = await Promise.all([
 		supabase.from('battles').select('id, category, outputs'),
 		supabase.from('votes').select('battle_id, choice')
 	]);
 
-	// Build vote counts per battle
+	const filteredBattles = activeCategory === 'all'
+		? (battles ?? [])
+		: (battles ?? []).filter(b => b.category === activeCategory);
+
+	const filteredBattleIds = new Set(filteredBattles.map(b => b.id));
+
 	const voteCounts = new Map<string, Record<string, number>>();
 	for (const v of votes ?? []) {
+		if (!filteredBattleIds.has(v.battle_id)) continue;
 		if (!voteCounts.has(v.battle_id)) voteCounts.set(v.battle_id, {});
 		const c = voteCounts.get(v.battle_id)!;
 		c[v.choice] = (c[v.choice] ?? 0) + 1;
@@ -41,7 +52,7 @@ export const load: PageServerLoad = async () => {
 	const slots = ['A', 'B', 'C', 'D', 'E'] as const;
 	const outputKeys = ['modelA', 'modelB', 'modelC', 'modelD', 'modelE'] as const;
 
-	for (const battle of battles ?? []) {
+	for (const battle of filteredBattles) {
 		const outputs = battle.outputs as Record<string, { model_id: string } | undefined>;
 		const slotToModel: Partial<Record<string, ModelName>> = {};
 
@@ -55,7 +66,6 @@ export const load: PageServerLoad = async () => {
 			.filter(([k]) => k !== 'all_bad')
 			.reduce((sum, [, n]) => sum + n, 0);
 
-		// Determine winner (most votes, no ties)
 		let winner: ModelName | null = null;
 		let maxV = 0;
 		let tied = false;
@@ -88,10 +98,14 @@ export const load: PageServerLoad = async () => {
 		}))
 		.sort((a, b) => b.winRate - a.winRate);
 
+	const totalFilteredVotes = (votes ?? [])
+		.filter(v => filteredBattleIds.has(v.battle_id) && v.choice !== 'all_bad').length;
+
 	return {
 		rows,
-		totalBattles: (battles ?? []).length,
-		totalVotes: (votes ?? []).filter((v) => v.choice !== 'all_bad').length,
+		activeCategory,
+		totalBattles: filteredBattles.length,
+		totalVotes: totalFilteredVotes,
 		meta: {
 			title: `AI Model Leaderboard | ${SITE_NAME}`,
 			description: 'Which AI wins the most blind battles? Real crowd votes, no brand bias. Claude vs ChatGPT vs Gemini vs Grok vs Perplexity — ranked by humans.',

@@ -1,8 +1,14 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { MODEL_COLORS } from '$lib/types';
+	import { MODEL_COLORS, CATEGORIES, CATEGORY_LABELS } from '$lib/types';
+	import ModelLogo from '$lib/components/ModelLogo.svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	const tabs = [
+		{ value: 'all', label: 'All' },
+		...CATEGORIES.map(c => ({ value: c, label: CATEGORY_LABELS[c] }))
+	];
 </script>
 
 <svelte:head>
@@ -27,9 +33,24 @@
 		</div>
 	</div>
 
+	<!-- Category filter tabs -->
+	<div class="flex gap-1 flex-wrap mb-6">
+		{#each tabs as tab}
+			<a
+				href="/leaderboard{tab.value === 'all' ? '' : '?category=' + tab.value}"
+				class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+				{data.activeCategory === tab.value
+					? 'bg-[#C3F73A] text-[#0D1117]'
+					: 'bg-[#21262D] text-[#8B949E] hover:text-white border border-[#30363D]'}"
+			>
+				{tab.label}
+			</a>
+		{/each}
+	</div>
+
 	{#if data.rows.length === 0}
 		<div class="card p-10 text-center text-[#8B949E]">
-			No battle data yet. Check back after some battles have been voted on.
+			No battle data yet for this category. Check back after some battles have been voted on.
 		</div>
 	{:else}
 		<!-- Table -->
@@ -48,12 +69,9 @@
 					<!-- Rank -->
 					<span class="text-[#6E7681] text-sm tabular-nums">{i + 1}</span>
 
-					<!-- Model name -->
-					<div class="flex items-center gap-3 min-w-0">
-						<div
-							class="h-2.5 w-2.5 rounded-full shrink-0"
-							style="background:{MODEL_COLORS[row.model]}"
-						></div>
+					<!-- Model name + logo -->
+					<div class="flex items-center gap-2.5 min-w-0">
+						<ModelLogo model={row.model} />
 						<span class="text-white font-medium text-sm truncate">{row.label}</span>
 					</div>
 

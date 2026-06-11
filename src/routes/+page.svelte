@@ -3,6 +3,7 @@
 	import BattleFlow from '$lib/components/BattleFlow.svelte';
 	import CategoryNav from '$lib/components/CategoryNav.svelte';
 	import StatsRow from '$lib/components/StatsRow.svelte';
+	import StreakBadge from '$lib/components/StreakBadge.svelte';
 	import { CATEGORY_LABELS } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
@@ -45,6 +46,9 @@
 			5 models. Same prompt. No names. Real humans vote blind — the only AI benchmark brands can't game.
 		</p>
 	</div>
+
+	<!-- Personal streak (client-only, reads localStorage) -->
+	<StreakBadge />
 
 	<!-- Stats -->
 	<div class="mb-10">
@@ -113,6 +117,8 @@
 	<div class="mt-12 pt-6 border-t border-[#21262D] flex flex-wrap items-center justify-between gap-4">
 		<p class="text-[#6E7681] text-xs">The social human benchmark for AI.</p>
 		<div class="flex items-center gap-5 text-xs text-[#6E7681]">
+			<a href="/weekly" class="hover:text-[#8B949E] transition-colors">Weekly</a>
+			<a href="/leaderboard" class="hover:text-[#8B949E] transition-colors">Leaderboard</a>
 			<a href="/methodology" class="hover:text-[#8B949E] transition-colors">Methodology</a>
 			<a href="/press" class="hover:text-[#8B949E] transition-colors">Press</a>
 			<a href="/faq" class="hover:text-[#8B949E] transition-colors">FAQ</a>
