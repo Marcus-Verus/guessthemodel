@@ -87,29 +87,37 @@ async function createDailyDeck(supabase: ReturnType<typeof createClient>, today:
 	const pool = fresh.length >= 3 ? fresh : theme.humans;
 	const humans = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
 
+	const isUsable = (t: string) => {
+		const words = t.trim().split(/\s+/);
+		return words.length >= 6 && words.length <= 60 && /^[A-Za-z“"']/.test(t.trim()) && !t.includes('\n\n');
+	};
+
 	const modelIds = Object.values(MODEL_IDS).sort(() => Math.random() - 0.5).slice(0, 3);
 	const aiTexts = await Promise.all(
 		modelIds.map(async (id) => {
-			const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-					'Content-Type': 'application/json',
-					'HTTP-Referer': 'https://guessthemodel.com',
-					'X-Title': 'GuessTheModel'
-				},
-				body: JSON.stringify({
-					model: id,
-					messages: [{ role: 'user', content: theme.aiInstruction }],
-					temperature: 0.9,
-					max_tokens: 120
-				})
-			});
-			if (!res.ok) throw new Error(`OpenRouter ${id}: ${await res.text()}`);
-			const data = await res.json();
-			const text = (data.choices[0]?.message?.content ?? '').trim().replace(/^["']|["']$/g, '');
-			if (!text) throw new Error(`Empty deck output from ${id}`);
-			return { model_id: id, text };
+			// generous budget — reasoning models burn tokens thinking first
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+					method: 'POST',
+					headers: {
+						Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+						'Content-Type': 'application/json',
+						'HTTP-Referer': 'https://guessthemodel.com',
+						'X-Title': 'GuessTheModel'
+					},
+					body: JSON.stringify({
+						model: id,
+						messages: [{ role: 'user', content: theme.aiInstruction }],
+						temperature: 0.9,
+						max_tokens: 1000
+					})
+				});
+				if (!res.ok) throw new Error(`OpenRouter ${id}: ${await res.text()}`);
+				const data = await res.json();
+				const text = (data.choices[0]?.message?.content ?? '').trim().replace(/^["'“]|["'”]$/g, '');
+				if (isUsable(text)) return { model_id: id, text };
+			}
+			throw new Error(`Unusable deck output from ${id} after 2 attempts`);
 		})
 	);
 
