@@ -7,7 +7,7 @@ import { SITE_URL, SITE_NAME, OG_IMAGE } from '$lib/seo';
 export const load: PageServerLoad = async () => {
 	const today = new Date().toISOString().slice(0, 10);
 
-	const [{ data: dailyBattle }, stats, { data: recentBattles }] = await Promise.all([
+	const [{ data: dailyBattle }, stats, { data: recentBattles }, { count: battleCount }] = await Promise.all([
 		supabase
 			.from('battles')
 			.select('*')
@@ -20,7 +20,12 @@ export const load: PageServerLoad = async () => {
 			.from('battles')
 			.select('*')
 			.order('created_at', { ascending: false })
-			.limit(12)
+			.limit(12),
+		supabase
+			.from('battles')
+			.select('*', { count: 'exact', head: true })
+			.eq('is_daily', true)
+			.lte('battle_date', today)
 	]);
 
 	function toSafe(battle: Battle): SafeBattle {
@@ -38,12 +43,13 @@ export const load: PageServerLoad = async () => {
 
 	return {
 		daily: dailyBattle ? toSafe(dailyBattle as unknown as Battle) : null,
+		battleNumber: battleCount ?? 0,
 		stats,
 		recent: (recentBattles ?? []).map((b) => toSafe(b as unknown as Battle)),
 		meta: {
 			title: `${SITE_NAME} — Can You Tell Which AI Wrote This?`,
 			description:
-				'Vote blind on real AI outputs. Guess which model wrote it — Claude, ChatGPT or Gemini. See the crowd results and find out if you can tell the difference.',
+				'5 AI models. Same prompt. No names. Vote blind and find out if you can tell Claude from ChatGPT from Gemini. The social human benchmark for AI.',
 			canonical: SITE_URL,
 			ogImage: OG_IMAGE
 		}

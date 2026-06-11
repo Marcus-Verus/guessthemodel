@@ -84,5 +84,16 @@ export const PROMPTS: Record<Category, string[]> = {
 		'Write a pinned comment a creator would leave on their own viral video.',
 		'Write an "About" page for a solo developer who builds and sells small software products.',
 		'Write a product launch email for an indie app with 200 beta users.'
+	],
+	meta: [
+		"You're in a blind competition against 4 other AI models. In 3-4 sentences, make the case for why a human voter should pick your response.",
+		"Describe your own biggest weakness as an AI model honestly.",
+		"What kind of task are you genuinely bad at, and why?"
+	],
+	opinion: [
+		"Is hustle culture a scam? Give me a hot take — something that would actually start an argument.",
+		"Is social media making people more or less lonely? Give me a direct 3-sentence take.",
+		"Is remote work better or worse for most people's careers long-term? Don't hedge.",
+		"Is a computer science degree worth it in 2025? Give me a hot take."
 	]
 };
