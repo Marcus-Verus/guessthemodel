@@ -1,5 +1,5 @@
 -- GuessTheModel — Supabase schema
--- Run this in your Supabase SQL editor
+-- Run this in your Supabase SQL editor for a fresh setup
 
 -- ──────────────────────────────────────────
 -- TABLES
@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS battles (
   id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   prompt      text NOT NULL,
   category    text NOT NULL CHECK (category IN ('coding', 'career', 'writing', 'research', 'roast', 'creator')),
-  -- outputs: { modelA: { text, model_id }, modelB: { text, model_id } }
-  -- model names are only exposed server-side; clients receive only the text fields
+  -- outputs: { modelA: { text, model_id }, modelB: { text, model_id }, modelC: { text, model_id } }
+  -- Always Claude (A), ChatGPT (B), Gemini (C). model names are only exposed server-side.
   outputs     jsonb NOT NULL,
   is_daily    boolean DEFAULT false,
   battle_date date,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS battles (
 CREATE TABLE IF NOT EXISTS votes (
   id                 uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   battle_id          uuid REFERENCES battles(id) ON DELETE CASCADE NOT NULL,
-  choice             text NOT NULL CHECK (choice IN ('A', 'B', 'both_bad')),
+  choice             text NOT NULL CHECK (choice IN ('A', 'B', 'C', 'all_bad')),
   model_guess        text CHECK (model_guess IN ('chatgpt', 'claude', 'gemini', 'grok', 'perplexity')),
   crowd_prediction   text CHECK (crowd_prediction IN ('chatgpt', 'claude', 'gemini', 'grok', 'perplexity')),
   fingerprint        text NOT NULL,
@@ -60,25 +60,3 @@ CREATE POLICY "votes_public_read"
 
 CREATE POLICY "votes_public_insert"
   ON votes FOR INSERT WITH CHECK (true);
-
--- ──────────────────────────────────────────
--- SAMPLE DATA (optional — delete before prod)
--- ──────────────────────────────────────────
-
--- INSERT INTO battles (prompt, category, outputs, is_daily, battle_date)
--- VALUES (
---   'Explain recursion like I''m 10 years old.',
---   'coding',
---   '{
---     "modelA": {
---       "text": "Imagine you have a set of Russian dolls...",
---       "model_id": "anthropic/claude-sonnet-4-5"
---     },
---     "modelB": {
---       "text": "Think of recursion like looking in a mirror with another mirror behind you...",
---       "model_id": "openai/gpt-4o"
---     }
---   }',
---   true,
---   CURRENT_DATE
--- );

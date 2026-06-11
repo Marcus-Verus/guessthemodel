@@ -1,24 +1,32 @@
 <script lang="ts">
-	import type { SafeBattle, ModelName, RevealPayload } from '$lib/types';
-	import { MODEL_LABELS, CATEGORY_LABELS } from '$lib/types';
+	import type { SafeBattle, ModelName, RevealPayload, VoteChoice } from '$lib/types';
+	import { MODEL_LABELS, BATTLE_MODELS } from '$lib/types';
 	import ModelButton from './ModelButton.svelte';
 
 	let { battle }: { battle: SafeBattle } = $props();
 
 	type Step = 'vote' | 'guess' | 'predict' | 'reveal';
 
+	// Six permutations of [A, B, C] — chosen by hash so each visitor sees a different order
+	const ORDERINGS: VoteChoice[][] = [
+		['A', 'B', 'C'],
+		['A', 'C', 'B'],
+		['B', 'A', 'C'],
+		['B', 'C', 'A'],
+		['C', 'A', 'B'],
+		['C', 'B', 'A']
+	];
+
 	let step = $state<Step>('vote');
-	let choice = $state<'A' | 'B' | 'both_bad' | null>(null);
+	let choice = $state<VoteChoice | null>(null);
 	let modelGuess = $state<ModelName | null>(null);
 	let crowdPrediction = $state<ModelName | null>(null);
 	let revealData = $state<RevealPayload | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let fingerprint = $state('');
-	let swap = $state(false);
+	let positionOrder = $state<VoteChoice[]>(['A', 'B', 'C']);
 	let copied = $state(false);
-
-	const MODELS: ModelName[] = ['chatgpt', 'claude', 'gemini', 'grok', 'perplexity'];
 
 	$effect(() => {
 		let fp = localStorage.getItem('gtm_fp');
@@ -28,11 +36,11 @@
 		}
 		fingerprint = fp;
 
-		// Deterministic position swap per visitor+battle
+		// Deterministic position shuffle per visitor+battle
 		const hash = [...(fp + battle.id)].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-		swap = hash % 2 === 0;
+		positionOrder = ORDERINGS[hash % 6];
 
-		// Check if already voted
+		// Replay cached vote
 		const cached = localStorage.getItem(`gtm_vote_${battle.id}`);
 		if (cached) {
 			try {
@@ -48,18 +56,20 @@
 		}
 	});
 
-	// Accounts for visual swap
-	const leftOutput = $derived(swap ? battle.outputs.modelB : battle.outputs.modelA);
-	const rightOutput = $derived(swap ? battle.outputs.modelA : battle.outputs.modelB);
+	function getOutput(key: VoteChoice) {
+		if (key === 'all_bad') return battle.outputs.modelA; // never called for all_bad
+		return battle.outputs[`model${key}` as 'modelA' | 'modelB' | 'modelC'];
+	}
 
-	function handleVote(position: 'left' | 'right' | 'both_bad') {
-		if (position === 'both_bad') {
-			choice = 'both_bad';
-		} else if (position === 'left') {
-			choice = swap ? 'B' : 'A';
-		} else {
-			choice = swap ? 'A' : 'B';
-		}
+	function getModelName(key: VoteChoice): ModelName {
+		if (!revealData || key === 'all_bad') return 'claude';
+		if (key === 'A') return revealData.model_A_name;
+		if (key === 'B') return revealData.model_B_name;
+		return revealData.model_C_name;
+	}
+
+	function handleVote(position: number | 'all_bad') {
+		choice = position === 'all_bad' ? 'all_bad' : (positionOrder[position] as VoteChoice);
 		step = 'guess';
 	}
 
@@ -110,7 +120,7 @@
 			step = 'reveal';
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Something went wrong';
-			step = 'reveal'; // show error on reveal step
+			step = 'reveal';
 		} finally {
 			loading = false;
 		}
@@ -124,37 +134,43 @@
 	function beatPercent(): number {
 		if (!revealData) return 0;
 		const { stats, your_choice } = revealData;
-		if (your_choice === 'both_bad') return pct(stats.both_bad, stats.total);
-		const myVotes = your_choice === 'A' ? stats.A : stats.B;
+		if (your_choice === 'all_bad') return pct(stats.all_bad, stats.total);
+		const myVotes = your_choice === 'A' ? stats.A : your_choice === 'B' ? stats.B : stats.C;
 		return pct(myVotes, stats.total);
 	}
 
 	async function copyShareText() {
 		if (!revealData) return;
-		const { stats, model_A_name, model_B_name, your_choice } = revealData;
-		const pickedModel =
-			your_choice === 'A'
-				? MODEL_LABELS[model_A_name]
-				: your_choice === 'B'
-					? MODEL_LABELS[model_B_name]
-					: 'Neither';
+		const { stats, model_A_name, model_B_name, model_C_name, your_choice } = revealData;
+
+		let pickedLabel: string;
+		if (your_choice === 'all_bad') {
+			pickedLabel = 'None (all bad)';
+		} else if (your_choice === 'A') {
+			pickedLabel = MODEL_LABELS[model_A_name];
+		} else if (your_choice === 'B') {
+			pickedLabel = MODEL_LABELS[model_B_name];
+		} else {
+			pickedLabel = MODEL_LABELS[model_C_name];
+		}
+
 		const guessLabel = modelGuess ? MODEL_LABELS[modelGuess] : 'skipped';
 		const beat = beatPercent();
 
-		const text = `I picked ${pickedModel}. Thought it was ${guessLabel}. Beat ${beat}% of voters.\n[${MODEL_LABELS[model_A_name]} ${pct(stats.A, stats.total)}% · ${MODEL_LABELS[model_B_name]} ${pct(stats.B, stats.total)}% · Both bad ${pct(stats.both_bad, stats.total)}%]\nguessthemodel.com`;
+		const text = `I picked ${pickedLabel}. Thought it was ${guessLabel}. Beat ${beat}% of voters.\n[${MODEL_LABELS[model_A_name]} ${pct(stats.A, stats.total)}% · ${MODEL_LABELS[model_B_name]} ${pct(stats.B, stats.total)}% · ${MODEL_LABELS[model_C_name]} ${pct(stats.C, stats.total)}%]\nguessthemodel.com`;
 
 		await navigator.clipboard.writeText(text);
 		copied = true;
 		setTimeout(() => (copied = false), 2000);
 	}
 
+	function getChosenOutputText(): string {
+		if (!choice || choice === 'all_bad') return '';
+		return getOutput(choice).text;
+	}
+
 	const STEPS: Step[] = ['vote', 'guess', 'predict', 'reveal'];
 	const stepIndex = $derived(STEPS.indexOf(step));
-
-	function getChosenOutputText(): string {
-		if (!choice || choice === 'both_bad') return '';
-		return choice === 'A' ? battle.outputs.modelA.text : battle.outputs.modelB.text;
-	}
 </script>
 
 <!-- Step progress dots -->
@@ -171,7 +187,6 @@
 {#if step === 'vote'}
 	<!-- STEP 1: VOTE -->
 	<div class="animate-fade-up">
-		<!-- Prompt -->
 		<div class="mb-6">
 			<p class="label mb-2">The prompt</p>
 			<p class="text-white text-base leading-relaxed bg-[#21262D] rounded-lg px-4 py-3 border border-[#30363D]">
@@ -179,7 +194,6 @@
 			</p>
 		</div>
 
-		<!-- Methodology bar -->
 		<div class="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-xs text-[#6E7681]">
 			<span>Same prompt</span>
 			<span>·</span>
@@ -187,48 +201,40 @@
 			<span>·</span>
 			<span>Max 200 words</span>
 			<span>·</span>
-			<span>Position randomised</span>
+			<span>Order randomised</span>
 		</div>
 
-		<!-- Outputs side by side -->
-		<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-			<div class="card p-4 flex flex-col">
-				<p class="label mb-3">Model A</p>
-				<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap">{leftOutput.text}</p>
-				<button
-					onclick={() => handleVote('left')}
-					class="mt-4 w-full rounded-lg border border-[#30363D] bg-[#21262D] px-4 py-2.5 text-sm font-medium text-white hover:border-[#C3F73A] hover:bg-[#C3F73A10] hover:text-[#C3F73A] transition-all"
-				>
-					Model A is better
-				</button>
-			</div>
-
-			<div class="card p-4 flex flex-col">
-				<p class="label mb-3">Model B</p>
-				<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap">{rightOutput.text}</p>
-				<button
-					onclick={() => handleVote('right')}
-					class="mt-4 w-full rounded-lg border border-[#30363D] bg-[#21262D] px-4 py-2.5 text-sm font-medium text-white hover:border-[#C3F73A] hover:bg-[#C3F73A10] hover:text-[#C3F73A] transition-all"
-				>
-					Model B is better
-				</button>
-			</div>
+		<!-- Three outputs -->
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+			{#each [0, 1, 2] as pos}
+				{@const output = getOutput(positionOrder[pos])}
+				<div class="card p-4 flex flex-col">
+					<p class="label mb-3">Model {String.fromCharCode(65 + pos)}</p>
+					<p class="text-[#8B949E] text-sm leading-relaxed flex-1 whitespace-pre-wrap">{output.text}</p>
+					<button
+						onclick={() => handleVote(pos)}
+						class="mt-4 w-full rounded-lg border border-[#30363D] bg-[#21262D] px-4 py-2.5 text-sm font-medium text-white hover:border-[#C3F73A] hover:bg-[#C3F73A10] hover:text-[#C3F73A] transition-all"
+					>
+						Model {String.fromCharCode(65 + pos)} is best
+					</button>
+				</div>
+			{/each}
 		</div>
 
-		<!-- Both bad -->
 		<div class="flex justify-center">
 			<button
-				onclick={() => handleVote('both_bad')}
+				onclick={() => handleVote('all_bad')}
 				class="rounded-lg border border-[#30363D] px-6 py-2 text-sm font-medium text-[#6E7681] hover:border-[#F85149] hover:text-[#F85149] transition-all"
 			>
-				Both are bad
+				All are bad
 			</button>
 		</div>
 	</div>
+
 {:else if step === 'guess'}
 	<!-- STEP 2: GUESS THE MODEL -->
 	<div class="animate-fade-up">
-		{#if choice !== 'both_bad'}
+		{#if choice !== 'all_bad'}
 			<div class="mb-6">
 				<p class="label mb-2">Your pick</p>
 				<p class="text-[#8B949E] text-sm leading-relaxed bg-[#21262D] rounded-lg px-4 py-3 border border-[#30363D] line-clamp-4">
@@ -241,7 +247,7 @@
 		<p class="text-[#8B949E] text-sm mb-5">Take a guess. You can skip.</p>
 
 		<div class="flex flex-wrap gap-3 mb-6">
-			{#each MODELS as model}
+			{#each BATTLE_MODELS as model}
 				<ModelButton {model} selected={modelGuess === model} onclick={() => handleGuess(model)} />
 			{/each}
 		</div>
@@ -253,6 +259,7 @@
 			Skip
 		</button>
 	</div>
+
 {:else if step === 'predict'}
 	<!-- STEP 3: PREDICT THE CROWD -->
 	<div class="animate-fade-up">
@@ -260,7 +267,7 @@
 		<p class="text-[#8B949E] text-sm mb-5">Predict the crowd vote. You can skip.</p>
 
 		<div class="flex flex-wrap gap-3 mb-6">
-			{#each MODELS as model}
+			{#each BATTLE_MODELS as model}
 				<ModelButton {model} selected={crowdPrediction === model} onclick={() => handlePredict(model)} />
 			{/each}
 		</div>
@@ -279,6 +286,7 @@
 			</button>
 		{/if}
 	</div>
+
 {:else if step === 'reveal'}
 	<!-- STEP 4: REVEAL -->
 	<div class="animate-fade-up">
@@ -292,41 +300,30 @@
 				<p class="text-[#F85149] text-sm">{error}</p>
 			</div>
 		{:else if revealData}
-			{@const { stats, model_A_name, model_B_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
+			{@const { stats, model_A_name, model_B_name, model_C_name, model_guess_correct, crowd_prediction_correct, insight } = revealData}
 
-			<!-- Model reveal -->
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-				<!-- Model A card -->
-				<div class="card p-4 {choice === 'A' ? 'border-[#3FB950]' : ''}">
-					<div class="flex items-center justify-between mb-3">
-						<p class="label">Model A</p>
-						<span class="text-sm font-bold text-white">
-							{MODEL_LABELS[swap ? model_B_name : model_A_name]}
-							{#if choice === 'A'}
-								<span class="ml-1 text-[#3FB950]">← your pick</span>
-							{/if}
-						</span>
+			<!-- Three model cards in display order -->
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+				{#each [0, 1, 2] as pos}
+					{@const key = positionOrder[pos]}
+					{@const modelName = getModelName(key)}
+					{@const output = getOutput(key)}
+					{@const isMyPick = choice === key}
+					<div class="card p-4 {isMyPick ? 'border-[#3FB950]' : ''}">
+						<div class="flex items-center justify-between mb-3">
+							<p class="label">Model {String.fromCharCode(65 + pos)}</p>
+							<span class="text-sm font-bold text-white">
+								{MODEL_LABELS[modelName]}
+								{#if isMyPick}
+									<span class="ml-1 text-[#3FB950] text-xs">← your pick</span>
+								{/if}
+							</span>
+						</div>
+						<p class="text-[#8B949E] text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
+							{output.text}
+						</p>
 					</div>
-					<p class="text-[#8B949E] text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
-						{leftOutput.text}
-					</p>
-				</div>
-
-				<!-- Model B card -->
-				<div class="card p-4 {choice === 'B' ? 'border-[#3FB950]' : ''}">
-					<div class="flex items-center justify-between mb-3">
-						<p class="label">Model B</p>
-						<span class="text-sm font-bold text-white">
-							{MODEL_LABELS[swap ? model_A_name : model_B_name]}
-							{#if choice === 'B'}
-								<span class="ml-1 text-[#3FB950]">← your pick</span>
-							{/if}
-						</span>
-					</div>
-					<p class="text-[#8B949E] text-xs leading-relaxed whitespace-pre-wrap line-clamp-6">
-						{rightOutput.text}
-					</p>
-				</div>
+				{/each}
 			</div>
 
 			<!-- Crowd vote breakdown -->
@@ -334,16 +331,17 @@
 				<p class="label mb-3">Crowd vote</p>
 				<div class="space-y-2">
 					{#each [
-						{ label: MODEL_LABELS[model_A_name], count: stats.A, isWinner: stats.A >= stats.B && stats.A >= stats.both_bad },
-						{ label: MODEL_LABELS[model_B_name], count: stats.B, isWinner: stats.B > stats.A && stats.B >= stats.both_bad },
-						{ label: 'Both bad', count: stats.both_bad, isWinner: false }
-					] as row}
+						{ label: MODEL_LABELS[model_A_name], count: stats.A },
+						{ label: MODEL_LABELS[model_B_name], count: stats.B },
+						{ label: MODEL_LABELS[model_C_name], count: stats.C },
+						{ label: 'All bad', count: stats.all_bad }
+					] as row, i}
+						{@const isWinner = i < 3 && row.count === Math.max(stats.A, stats.B, stats.C) && row.count > 0}
 						<div class="flex items-center gap-3">
 							<span class="text-sm text-[#8B949E] w-28 shrink-0">{row.label}</span>
 							<div class="flex-1 h-2 bg-[#21262D] rounded-full overflow-hidden">
 								<div
-									class="h-full rounded-full transition-all duration-500
-									{row.isWinner ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}"
+									class="h-full rounded-full transition-all duration-500 {isWinner ? 'bg-[#C3F73A]' : 'bg-[#30363D]'}"
 									style="width:{pct(row.count, stats.total)}%"
 								></div>
 							</div>
@@ -356,7 +354,7 @@
 				<p class="text-[#6E7681] text-xs mt-3">{stats.total} vote{stats.total !== 1 ? 's' : ''}</p>
 			</div>
 
-			<!-- Your scores -->
+			<!-- Scores -->
 			<div class="flex flex-wrap gap-3 mb-4">
 				{#if model_guess_correct !== null}
 					<div class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm
@@ -374,7 +372,6 @@
 				{/if}
 			</div>
 
-			<!-- Insight -->
 			{#if insight}
 				<p class="text-[#8B949E] text-sm mb-5 italic">"{insight}"</p>
 			{/if}
@@ -383,15 +380,15 @@
 			<div class="card p-4 mb-4 bg-[#21262D]">
 				<p class="label mb-2">Share your result</p>
 				<div class="font-mono text-sm text-[#C3F73A] leading-relaxed">
-					{#if choice !== 'both_bad'}
-						I picked {choice === 'A' ? MODEL_LABELS[model_A_name] : MODEL_LABELS[model_B_name]}.
+					{#if choice !== 'all_bad' && choice !== null}
+						I picked {MODEL_LABELS[getModelName(choice)]}.
 						Thought it was {modelGuess ? MODEL_LABELS[modelGuess] : 'unknown'}.
 						Beat {beatPercent()}% of voters.
 					{:else}
-						I said both were bad. Beat {beatPercent()}% of voters.
+						I said all were bad. Beat {beatPercent()}% of voters.
 					{/if}
 					<br />
-					[{MODEL_LABELS[model_A_name]} {pct(stats.A, stats.total)}% · {MODEL_LABELS[model_B_name]} {pct(stats.B, stats.total)}% · Both bad {pct(stats.both_bad, stats.total)}%]
+					[{MODEL_LABELS[model_A_name]} {pct(stats.A, stats.total)}% · {MODEL_LABELS[model_B_name]} {pct(stats.B, stats.total)}% · {MODEL_LABELS[model_C_name]} {pct(stats.C, stats.total)}%]
 					<br />
 					guessthemodel.com
 				</div>
@@ -404,7 +401,6 @@
 				</button>
 			</div>
 
-			<!-- Next battle link -->
 			<a
 				href="/"
 				class="inline-flex items-center gap-2 rounded-lg bg-[#C3F73A] px-5 py-2.5 text-sm font-bold text-[#0D1117] hover:bg-[#A8D428] transition-colors"

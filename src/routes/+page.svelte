@@ -9,8 +9,24 @@
 </script>
 
 <svelte:head>
-	<title>GuessTheModel — Can you tell which AI wrote this?</title>
-	<meta name="description" content="Vote blind on AI outputs. Guess which model wrote what. See if the crowd agrees." />
+	<title>{data.meta.title}</title>
+	<meta name="description" content={data.meta.description} />
+	<link rel="canonical" href={data.meta.canonical} />
+
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="GuessTheModel" />
+	<meta property="og:title" content={data.meta.title} />
+	<meta property="og:description" content={data.meta.description} />
+	<meta property="og:url" content={data.meta.canonical} />
+	<meta property="og:image" content={data.meta.ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="GuessTheModel — Vote blind on AI outputs" />
+
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={data.meta.title} />
+	<meta name="twitter:description" content={data.meta.description} />
+	<meta name="twitter:image" content={data.meta.ogImage} />
 </svelte:head>
 
 <div class="mx-auto max-w-6xl px-4 sm:px-6 py-10">

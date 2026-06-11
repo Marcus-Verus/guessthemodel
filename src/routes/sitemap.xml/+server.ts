@@ -13,7 +13,6 @@ export const GET: RequestHandler = async () => {
 
 	const staticUrls = [
 		`<url><loc>${base}/</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
-		`<url><loc>${base}/leaderboard</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`,
 		...CATEGORIES.map(
 			(c) => `<url><loc>${base}/${c}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`
 		)

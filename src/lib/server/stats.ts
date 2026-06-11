@@ -11,7 +11,7 @@ export async function getGlobalStats(): Promise<GlobalStats> {
 	return {
 		votes_cast: votesRes.count ?? 0,
 		battles_run: battlesRes.count ?? 0,
-		models_tested: 5
+		models_tested: 3
 	};
 }
 
@@ -34,36 +34,51 @@ export async function getVoteStats(battleId: string): Promise<VoteStats | null> 
 	const total = votes.length;
 	const A = votes.filter((v) => v.choice === 'A').length;
 	const B = votes.filter((v) => v.choice === 'B').length;
-	const both_bad = votes.filter((v) => v.choice === 'both_bad').length;
+	const C = votes.filter((v) => v.choice === 'C').length;
+	const all_bad = votes.filter((v) => v.choice === 'all_bad').length;
 
 	const outputs = battle.outputs as {
 		modelA: { model_id: string };
 		modelB: { model_id: string };
+		modelC: { model_id: string };
 	};
 
 	return {
 		total,
 		A,
 		B,
-		both_bad,
+		C,
+		all_bad,
 		model_A_name: modelIdToName(outputs.modelA.model_id),
-		model_B_name: modelIdToName(outputs.modelB.model_id)
+		model_B_name: modelIdToName(outputs.modelB.model_id),
+		model_C_name: modelIdToName(outputs.modelC.model_id)
 	};
 }
 
 export function generateInsight(stats: VoteStats): string {
 	if (stats.total === 0) return '';
 
-	const bothBadPct = stats.both_bad / stats.total;
-	if (bothBadPct > 0.4) return 'Most voters found both responses disappointing.';
+	const allBadPct = stats.all_bad / stats.total;
+	if (allBadPct > 0.4) return 'Most voters found all three responses disappointing.';
 
-	const winnerChoice = stats.A >= stats.B ? 'A' : 'B';
-	const winner = winnerChoice === 'A' ? stats.model_A_name : stats.model_B_name;
-	const loser = winnerChoice === 'A' ? stats.model_B_name : stats.model_A_name;
-	const winVotes = winnerChoice === 'A' ? stats.A : stats.B;
-	const pct = Math.round((winVotes / stats.total) * 100);
+	const candidates = [
+		{ name: stats.model_A_name, votes: stats.A },
+		{ name: stats.model_B_name, votes: stats.B },
+		{ name: stats.model_C_name, votes: stats.C }
+	].sort((a, b) => b.votes - a.votes);
 
-	return `${MODEL_LABELS[winner]} won ${pct}% of votes over ${MODEL_LABELS[loser]}.`;
+	const winner = candidates[0];
+	const runnerUp = candidates[1];
+
+	if (winner.votes === 0) return '';
+
+	const pct = Math.round((winner.votes / stats.total) * 100);
+
+	if (pct > 60) {
+		return `${MODEL_LABELS[winner.name]} dominated with ${pct}% of the vote.`;
+	}
+
+	return `${MODEL_LABELS[winner.name]} edged out ${MODEL_LABELS[runnerUp.name]} with ${pct}% of votes.`;
 }
 
 export function modelIdToName(modelId: string): ModelName {

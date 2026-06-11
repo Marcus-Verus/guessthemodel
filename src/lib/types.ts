@@ -2,6 +2,11 @@ export type Category = 'coding' | 'career' | 'writing' | 'research' | 'roast' | 
 
 export type ModelName = 'chatgpt' | 'claude' | 'gemini' | 'grok' | 'perplexity';
 
+export type VoteChoice = 'A' | 'B' | 'C' | 'all_bad';
+
+/** The three models used in every battle */
+export const BATTLE_MODELS: ModelName[] = ['claude', 'chatgpt', 'gemini'];
+
 export const MODEL_LABELS: Record<ModelName, string> = {
 	chatgpt: 'ChatGPT',
 	claude: 'Claude',
@@ -41,6 +46,7 @@ export interface Battle {
 	outputs: {
 		modelA: BattleOutput;
 		modelB: BattleOutput;
+		modelC: BattleOutput;
 	};
 	is_daily: boolean;
 	battle_date: string | null;
@@ -55,6 +61,7 @@ export interface SafeBattle {
 	outputs: {
 		modelA: { text: string };
 		modelB: { text: string };
+		modelC: { text: string };
 	};
 	is_daily: boolean;
 	battle_date: string | null;
@@ -65,37 +72,22 @@ export interface VoteStats {
 	total: number;
 	A: number;
 	B: number;
-	both_bad: number;
+	C: number;
+	all_bad: number;
 	model_A_name: ModelName;
 	model_B_name: ModelName;
+	model_C_name: ModelName;
 }
 
 export interface RevealPayload {
 	model_A_name: ModelName;
 	model_B_name: ModelName;
-	your_choice: 'A' | 'B' | 'both_bad';
+	model_C_name: ModelName;
+	your_choice: VoteChoice;
 	model_guess_correct: boolean | null;
 	crowd_prediction_correct: boolean | null;
 	stats: VoteStats;
 	insight: string;
-}
-
-export interface ModelLeaderboardEntry {
-	model: ModelName;
-	wins: number;
-	total: number;
-	win_rate: number;
-	change: number;
-}
-
-export interface PlayerLeaderboardEntry {
-	fingerprint: string;
-	display_id: string;
-	streak: number;
-	model_guesses_correct: number;
-	crowd_predictions_correct: number;
-	total_votes: number;
-	titles: string[];
 }
 
 export interface GlobalStats {
@@ -110,8 +102,5 @@ export const PLAYER_TITLES = {
 	BIAS_BREAKER: 'Bias Breaker',
 	CLAUDE_LOYALIST: 'Claude Loyalist',
 	CHATGPT_LOYALIST: 'ChatGPT Loyalist',
-	GEMINI_LOYALIST: 'Gemini Loyalist',
-	GROK_LOYALIST: 'Grok Loyalist',
-	PERPLEXITY_LOYALIST: 'Perplexity Loyalist',
-	BOTH_BAD_CHAMPION: 'Both Bad Champion'
+	GEMINI_LOYALIST: 'Gemini Loyalist'
 } as const;
