@@ -445,14 +445,14 @@
 <div class="gtm-root">
 	{#if phase !== 'title'}
 		<header class="topbar">
-			<div class="disp logo">
+			<a class="disp logo" href="/" aria-label="DUPED home">
 				DUPED
 				<small>
 					{mode === 'endless'
 						? 'ENDLESS · 3 STRIKES'
 						: `${cat.emoji} ${cat.label.toUpperCase()}`}
 				</small>
-			</div>
+			</a>
 			{#if mode === 'endless' && phase === 'play'}
 				<div class="endlesshud">
 					<span>RUN {run}</span>

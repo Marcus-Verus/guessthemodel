@@ -27,6 +27,24 @@
 	function stars(r: number) {
 		return '★★★★★'.slice(0, Math.round(r)) + '☆☆☆☆☆'.slice(0, 5 - Math.round(r));
 	}
+
+	let itemBusy = $state(-1);
+	async function regenItem(index: number) {
+		if (itemBusy >= 0 || busy) return;
+		itemBusy = index;
+		try {
+			const res = await fetch('/ops/regen-item', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ n: data.number, index })
+			});
+			if (res.ok) await invalidateAll();
+			else msg = `Item regen failed (HTTP ${res.status}).`;
+		} catch (err) {
+			msg = `Item regen failed (${err instanceof Error ? err.message : 'network'}).`;
+		}
+		itemBusy = -1;
+	}
 </script>
 
 <svelte:head>
@@ -67,6 +85,14 @@
 		{#each data.items as it, i (it.name + i)}
 			<div class="card {it.isReal ? 'real' : 'ai'}">
 				<div class="answer">{it.isReal ? 'REAL' : 'AI'}</div>
+				<button
+					class="reroll"
+					title={it.isReal ? 'Swap for a different real product' : 'Generate a different fake'}
+					onclick={() => regenItem(i)}
+					disabled={itemBusy >= 0 || busy}
+				>
+					{itemBusy === i ? '…' : '↻'}
+				</button>
 				<div class="emoji">{it.emoji || '📦'}</div>
 				<div class="body">
 					<div class="row">
@@ -201,6 +227,27 @@
 		letter-spacing: 0.05em;
 		padding: 2px 7px;
 		border-radius: 5px;
+	}
+	.reroll {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		width: 26px;
+		height: 26px;
+		border-radius: 7px;
+		border: 1px solid #2f3946;
+		background: #0d1117;
+		color: #b6bdc9;
+		font-size: 14px;
+		cursor: pointer;
+		line-height: 1;
+	}
+	.reroll:hover:not(:disabled) {
+		color: #fff;
+		border-color: #4a5666;
+	}
+	.reroll:disabled {
+		opacity: 0.5;
 	}
 	.card.real .answer {
 		background: #0c3b2a;

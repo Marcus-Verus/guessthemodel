@@ -1,11 +1,18 @@
 import {
 	buildDailyRounds,
 	categoryForDay,
+	shuffle,
+	REAL_PRODUCTS,
+	FALLBACK_FAKES,
 	type Category,
 	type Product
 } from '$lib/duped';
 import { db } from '$lib/server/supabase';
 import { generateFakes } from '$lib/server/fakes';
+
+function withCrowd(p: Product): Product {
+	return { ...p, crowd: 18 + Math.floor(Math.random() * 64) };
+}
 
 export interface DailyPuzzle {
 	day: number;
@@ -62,6 +69,66 @@ export async function getPuzzleForDay(day: number): Promise<DailyPuzzle> {
 /** Today's shared puzzle. */
 export function getDailyPuzzle(): Promise<DailyPuzzle> {
 	return getPuzzleForDay(dayIndex());
+}
+
+/**
+ * Replace a single card in a stored day with a fresh one of the same kind
+ * (real stays real, fake stays fake), avoiding the day's other items. Needs
+ * Supabase to persist. Returns the updated item list.
+ */
+export async function regenerateItem(
+	day: number,
+	index: number
+): Promise<{ ok: boolean; items?: Product[] }> {
+	const c = db();
+	const category = categoryForDay(day);
+
+	// Load (or generate) the current stored puzzle.
+	let items: Product[];
+	let live = false;
+	if (c) {
+		const row = await c
+			.from('daily_puzzles')
+			.select('items, live, category')
+			.eq('day', day)
+			.maybeSingle();
+		if (row.data && row.data.category === category.id) {
+			items = row.data.items as Product[];
+			live = !!row.data.live;
+		} else {
+			const built = await buildAndStore(day, category);
+			items = built.items;
+			live = built.live;
+		}
+	} else {
+		// No DB: can't persist a single swap, so just rebuild the whole day.
+		const built = await buildAndStore(day, category);
+		return { ok: true, items: built.items };
+	}
+
+	if (index < 0 || index >= items.length) return { ok: false, items };
+
+	const target = items[index];
+	const used = new Set(items.map((i) => i.name));
+	used.delete(target.name); // we're replacing this one
+
+	let replacement: Product | null = null;
+	if (target.isReal) {
+		const pool = REAL_PRODUCTS.filter((p) => p.cat === category.id && !used.has(p.name));
+		if (pool.length) replacement = { ...shuffle(pool)[0], isReal: true };
+	} else {
+		const fakes = await generateFakes(category.label);
+		const livePool = (fakes ?? []).filter((p) => !used.has(p.name));
+		const housePool = FALLBACK_FAKES.filter((p) => p.cat === category.id && !used.has(p.name));
+		const pool = livePool.length ? livePool : housePool;
+		if (pool.length) replacement = { ...shuffle(pool)[0], isReal: false };
+	}
+
+	if (!replacement) return { ok: false, items }; // nothing new available
+
+	items = items.map((it, i) => (i === index ? withCrowd(replacement!) : it));
+	await c.from('daily_puzzles').upsert({ day, category: category.id, items, live }, { onConflict: 'day' });
+	return { ok: true, items };
 }
 
 /**
