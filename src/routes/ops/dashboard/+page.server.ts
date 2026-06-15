@@ -79,7 +79,7 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 			.gte('created_at', since30)
 			.order('created_at', { ascending: false })
 			.limit(3000),
-		c.from('daily_puzzles').select('day, live').gte('day', today).lte('day', today + 6),
+		c.from('daily_puzzles').select('day, live, items').gte('day', today).lte('day', today + 6),
 		countType('play_game'),
 		countType('game_complete'),
 		countType('game_complete', since24),
@@ -105,17 +105,19 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		.slice(0, 25)
 		.map((e) => ({ type: e.type, meta: e.meta, at: e.created_at }));
 
-	// Upcoming week of games
-	const seededDays = new Set((upcomingRows.data ?? []).map((r) => r.day as number));
+	// Upcoming week of games (with each day's actual lineup, if generated)
+	type Row = { day: number; live: boolean; items: { name: string; isReal?: boolean }[] };
+	const byDay = new Map(((upcomingRows.data ?? []) as Row[]).map((r) => [r.day, r]));
 	const upcoming = Array.from({ length: 7 }, (_, i) => {
 		const day = today + i;
-		const cat = categoryForDay(day);
+		const row = byDay.get(day);
 		return {
 			number: numberForDay(day),
 			date: new Date(day * 86400000).toISOString().slice(0, 10),
-			category: cat,
+			category: categoryForDay(day),
 			isToday: i === 0,
-			seeded: seededDays.has(day)
+			seeded: !!row,
+			items: (row?.items ?? []).map((it) => ({ name: it.name, isReal: !!it.isReal }))
 		};
 	});
 

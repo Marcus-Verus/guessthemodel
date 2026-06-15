@@ -122,10 +122,23 @@
 		<div class="week">
 			{#each data.upcoming as d (d.number)}
 				<div class="day {d.isToday ? 'today' : ''}">
-					<span class="dn">#{d.number}{d.isToday ? ' · TODAY' : ''}</span>
-					<span class="de">{d.category.emoji}</span>
-					<span class="dc">{d.category.label}</span>
-					<span class="ds {d.seeded ? 'on' : 'off'}">{d.seeded ? '● ready' : '○ on-demand'}</span>
+					<div class="day-head">
+						<span class="dn">#{d.number}{d.isToday ? ' · TODAY' : ''}</span>
+						<span class="ds {d.seeded ? 'on' : 'off'}">{d.seeded ? '● ready' : '○ on-demand'}</span>
+					</div>
+					<div class="day-cat">{d.category.emoji} {d.category.label}</div>
+					{#if d.items.length}
+						<ul class="lineup">
+							{#each d.items as it (it.name)}
+								<li>
+									<span class="tag {it.isReal ? 'real' : 'ai'}">{it.isReal ? 'REAL' : 'AI'}</span>
+									<span class="iname">{it.name}</span>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="pending">Generates on first play. Pre-seed to preview.</p>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -250,7 +263,7 @@
 	}
 	.week {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: 10px;
 		margin-top: 10px;
 	}
@@ -259,13 +272,14 @@
 		border: 1px solid #232a33;
 		border-radius: 12px;
 		padding: 12px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		text-align: center;
 	}
 	.day.today {
 		border-color: #1230bf;
+	}
+	.day-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
 	}
 	.day .dn {
 		font-size: 10px;
@@ -273,12 +287,11 @@
 		letter-spacing: 0.06em;
 		color: #ffd200;
 	}
-	.day .de {
-		font-size: 26px;
-	}
-	.day .dc {
-		font-size: 11px;
-		color: #b6bdc9;
+	.day-cat {
+		font-size: 13px;
+		font-weight: 600;
+		color: #e6e8ef;
+		margin: 4px 0 8px;
 	}
 	.day .ds {
 		font-size: 10px;
@@ -289,6 +302,47 @@
 	}
 	.day .ds.off {
 		color: #8a94a6;
+	}
+	.lineup {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.lineup li {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+	}
+	.tag {
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		padding: 1px 5px;
+		border-radius: 4px;
+		flex-shrink: 0;
+	}
+	.tag.real {
+		background: #0c3b2a;
+		color: #00c98a;
+	}
+	.tag.ai {
+		background: #3a1414;
+		color: #ff6b5e;
+	}
+	.iname {
+		color: #c6ccd6;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.pending {
+		font-size: 11px;
+		color: #6b7384;
+		margin: 0;
 	}
 	.two {
 		display: grid;

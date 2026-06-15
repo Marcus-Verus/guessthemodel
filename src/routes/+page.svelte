@@ -506,7 +506,8 @@
 				</div>
 			{/if}
 			<footer class="footer">
-				duped.gg · contact: <a href="mailto:mark@duped.gg">mark@duped.gg</a>
+				<a href="/faq">FAQ</a> · <a href="/archive">Past days</a> · contact:
+				<a href="mailto:mark@duped.gg">mark@duped.gg</a>
 				<br />
 				<span style="opacity:.8">
 					As an Amazon Associate, duped.gg earns from qualifying purchases.
