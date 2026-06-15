@@ -39,12 +39,11 @@ async function buildAndStore(day: number, category: Category): Promise<DailyPuzz
 }
 
 /**
- * Return today's shared puzzle. Generated once (first visitor) and stored when
+ * Return the shared puzzle for a given day. Generated once and stored when
  * Supabase is configured, so everyone plays the same #N and past days persist.
  * Falls back to a per-request build with no DB.
  */
-export async function getDailyPuzzle(): Promise<DailyPuzzle> {
-	const day = dayIndex();
+export async function getPuzzleForDay(day: number): Promise<DailyPuzzle> {
 	const category = categoryForDay(day);
 	const c = db();
 	if (c) {
@@ -58,6 +57,11 @@ export async function getDailyPuzzle(): Promise<DailyPuzzle> {
 		}
 	}
 	return buildAndStore(day, category);
+}
+
+/** Today's shared puzzle. */
+export function getDailyPuzzle(): Promise<DailyPuzzle> {
+	return getPuzzleForDay(dayIndex());
 }
 
 /** Pre-seed a future (or any) day if it doesn't exist yet. Needs Supabase. */

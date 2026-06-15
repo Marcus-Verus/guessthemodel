@@ -21,7 +21,7 @@
 		</div>
 		<h1 class="disp h1">DUPED<em>.</em></h1>
 		<p class="sub">
-			{status === 404 ? "That page is an AI fake — it doesn't exist." : message}
+			{status === 404 ? "That page is an AI fake - it doesn't exist." : message}
 		</p>
 		<a class="playbtn" href="/" style="display:inline-block;text-decoration:none">
 			BACK TO THE GAME
