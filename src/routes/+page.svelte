@@ -66,6 +66,7 @@
 	}
 
 	async function startDaily() {
+		track('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
 		phase = 'loading';
 		copied = false;
@@ -86,6 +87,7 @@
 	}
 
 	function startEndless() {
+		track('play_game', { mode: 'endless' });
 		mode = 'endless';
 		copied = false;
 		const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
@@ -111,6 +113,13 @@
 		if (revealed || !p) return;
 		const cur = p;
 		const correct = saidReal === cur.isReal;
+		track('guess', {
+			mode,
+			correct,
+			is_real: !!cur.isReal,
+			category: cur.cat,
+			item: cur.name
+		});
 		guesses = [...guesses, { correct, isReal: !!cur.isReal, name: cur.name }];
 		if (mode === 'endless') {
 			if (correct) {
@@ -126,6 +135,7 @@
 	function next() {
 		if (mode === 'endless') {
 			if (strikes >= 3) {
+				track('endless_over', { run, best: bestRun });
 				phase = 'endlessOver';
 				return;
 			}
@@ -143,6 +153,14 @@
 		if (idx + 1 >= rounds.length) {
 			streak = score >= 4 ? streak + 1 : 0;
 			games += 1;
+			track('game_complete', {
+				mode: 'daily',
+				score,
+				out_of: 5,
+				streak,
+				category: cat.id,
+				used_live: usedLive
+			});
 			phase = 'results';
 		} else {
 			idx += 1;
@@ -151,7 +169,9 @@
 	}
 
 	function toggleSave(prod: Product) {
-		saved = saved.find((x) => x.name === prod.name)
+		const removing = saved.some((x) => x.name === prod.name);
+		if (!removing) track('save_find', { item: prod.name, category: prod.cat });
+		saved = removing
 			? saved.filter((x) => x.name !== prod.name)
 			: [...saved, prod];
 	}
@@ -159,16 +179,29 @@
 
 	function shareText(): string {
 		if (mode === 'endless') {
-			return `Duped ∞ survived ${run} in a row 🤖 (best ${bestRun})\nduped.gg`;
+			return [
+				'DUPED ∞ — real-or-AI survival 🤖',
+				`I survived ${run} in a row (best ${bestRun}).`,
+				'Think you can outlast it?',
+				'Play free → duped.gg'
+			].join('\n');
 		}
 		const grid = guesses.map((g) => (g.correct ? '🟩' : '🟥')).join('');
 		const fooled = guesses.find((g) => !g.correct);
-		const tail = fooled ? `duped by “${fooled.name}”` : 'un-dupable 😎';
 		const fire = streak > 0 ? ` 🔥${streak}` : '';
-		return `Duped ${cat.emoji} ${grid} ${score}/5${fire} — ${tail}\nduped.gg`;
+		const tail = fooled
+			? `Duped by “${fooled.name}” 😅 Your turn.`
+			: 'Un-dupable 😎 Bet you can’t.';
+		return [
+			`DUPED ${cat.emoji} ${cat.label}`,
+			`${grid}  ${score}/5${fire}`,
+			tail,
+			'Play free → duped.gg'
+		].join('\n');
 	}
 
 	async function copyShare() {
+		track('share', { method: 'copy', mode, score });
 		const txt = shareText();
 		try {
 			await navigator.clipboard.writeText(txt);
@@ -190,6 +223,13 @@
 
 	function catLabelFor(id: string): string {
 		return CATEGORIES.find((c) => c.id === id)?.label || 'AI Original';
+	}
+
+	// Thin, safe wrapper around GA4. No-ops if gtag hasn't loaded.
+	function track(event: string, params: Record<string, unknown> = {}) {
+		if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+			window.gtag('event', event, params);
+		}
 	}
 
 	// SERP-tuned: title ~51 chars (<580px), description ~150 chars (<920px).
@@ -286,7 +326,13 @@
 						{isSaved(r) ? '♥' : '♡'}
 					</button>
 					{#if r.buy}
-						<a class="go" href={r.buy} target="_blank" rel="noopener noreferrer">AMAZON →</a>
+						<a
+							class="go"
+							href={r.buy}
+							target="_blank"
+							rel="noopener noreferrer sponsored"
+							onclick={() => track('amazon_click', { item: r.name, category: r.cat, source: 'shop_list' })}
+						>AMAZON →</a>
 					{/if}
 				</div>
 			{/each}
@@ -429,7 +475,13 @@
 				</button>
 			{/if}
 			{#if p.isReal && p.buy}
-				<a class="buybtn" href={p.buy} target="_blank" rel="noopener noreferrer">
+				<a
+					class="buybtn"
+					href={p.buy}
+					target="_blank"
+					rel="noopener noreferrer sponsored"
+					onclick={() => track('amazon_click', { item: p.name, category: p.cat, source: 'reveal' })}
+				>
 					IT'S REALLY ON AMAZON →<small>SEE FOR YOURSELF</small>
 				</a>
 			{/if}
@@ -463,6 +515,16 @@
 			{:else}
 				<p class="fooledby">Un-dupable. The machines couldn't touch you. 😎</p>
 			{/if}
+
+			<!-- The payoff first: the real ones are actually for sale. -->
+			{@render shopList(realsThisGame, 'WAIT, THESE ARE REAL — SHOP THEM')}
+
+			<button class="sharebtn" onclick={copyShare}>
+				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY SHARE GRID'}
+			</button>
+			<button class="againbtn" onclick={startEndless}>∞ KEEP GOING — ENDLESS MODE</button>
+			<button class="againbtn" onclick={startDaily}>REPLAY {cat.label.toUpperCase()}</button>
+
 			<div class="statrow">
 				<div class="stat">
 					<b>{streak}</b>
@@ -470,26 +532,15 @@
 				</div>
 				<div class="stat">
 					<b>{games}</b>
-					<small>GAMES PLAYED</small>
+					<small>GAMES</small>
 				</div>
 				<div class="stat">
 					<b>{bestRun}</b>
 					<small>BEST ∞ RUN</small>
 				</div>
 			</div>
-			<button class="sharebtn" onclick={copyShare}>
-				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY SHARE GRID'}
-			</button>
-			<button class="againbtn" onclick={startEndless}>∞ KEEP GOING — ENDLESS MODE</button>
-			<button class="againbtn" onclick={startDaily}>REPLAY {cat.label.toUpperCase()}</button>
 			<div class="tmrw">
-				TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()} — COME BACK
-			</div>
-			{@render shopList(realsThisGame, 'THE REAL ONES — YES, ACTUALLY FOR SALE')}
-			<div class="live">
-				{usedLive
-					? "This round's fakes were generated live by Claude."
-					: 'Played with the house collection of fakes.'}
+				TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()}
 			</div>
 		</div>
 	{/if}
@@ -503,12 +554,12 @@
 			<p class="fooledby">
 				Three strikes. Best run this session: <b>{bestRun}</b>.
 			</p>
+			{@render shopList(realsThisGame, 'REAL ONES YOU MET — SHOP THEM')}
 			<button class="sharebtn" onclick={copyShare}>
 				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY MY RUN'}
 			</button>
 			<button class="againbtn" onclick={startEndless}>∞ RUN IT BACK</button>
 			<button class="againbtn" onclick={startDaily}>BACK TO TODAY'S 5</button>
-			{@render shopList(realsThisGame, 'REAL ONES YOU MET THIS RUN')}
 		</div>
 	{/if}
 </div>
