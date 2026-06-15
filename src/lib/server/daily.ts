@@ -9,9 +9,17 @@ import {
 } from '$lib/duped';
 import { db } from '$lib/server/supabase';
 import { generateFakes } from '$lib/server/fakes';
+import { imagesEnabled, generateProductImage } from '$lib/server/images';
 
 function withCrowd(p: Product): Product {
 	return { ...p, crowd: 18 + Math.floor(Math.random() * 64) };
+}
+
+/** Generate a product photo for a fake card (reals carry their catalog img). */
+async function withImage(item: Product): Promise<Product> {
+	if (item.img || item.isReal || !imagesEnabled()) return item;
+	const img = await generateProductImage(item.name, item.tagline);
+	return img ? { ...item, img } : item;
 }
 
 export interface DailyPuzzle {
@@ -28,8 +36,13 @@ function dayIndex(): number {
 /** Generate a puzzle for a day and store it, overwriting any stale row. */
 async function buildAndStore(day: number, category: Category): Promise<DailyPuzzle> {
 	const fakes = await generateFakes(category.label);
-	const items = buildDailyRounds(category, fakes);
+	let items = buildDailyRounds(category, fakes);
 	const live = !!fakes;
+
+	// Generate photos for the fake cards (no-op unless image gen is enabled).
+	if (imagesEnabled()) {
+		items = await Promise.all(items.map(withImage));
+	}
 
 	const c = db();
 	if (c) {
@@ -126,7 +139,8 @@ export async function regenerateItem(
 
 	if (!replacement) return { ok: false, items }; // nothing new available
 
-	items = items.map((it, i) => (i === index ? withCrowd(replacement!) : it));
+	const final = await withImage(withCrowd(replacement)); // photo for new fakes (no-op if disabled)
+	items = items.map((it, i) => (i === index ? final : it));
 	await c.from('daily_puzzles').upsert({ day, category: category.id, items, live }, { onConflict: 'day' });
 	return { ok: true, items };
 }
