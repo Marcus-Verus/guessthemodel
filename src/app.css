@@ -2,6 +2,14 @@
    DUPED — duped.gg global styles
    --------------------------------------------------------------- */
 
+@font-face {
+	font-family: 'Archivo Black';
+	src: url('/fonts/ArchivoBlack-Regular.ttf') format('truetype');
+	font-weight: 400 900;
+	font-style: normal;
+	font-display: swap;
+}
+
 :root {
 	--cobalt: #1230bf;
 	--cobalt-deep: #0b1f86;

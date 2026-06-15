@@ -2,7 +2,12 @@
 // Run: node scripts/generate-og.cjs
 const fs = require('fs');
 const path = require('path');
-const { createCanvas } = require('canvas');
+const { createCanvas, registerFont } = require('canvas');
+
+// Use the same display face the app self-hosts, so the card is pixel-matched.
+const FONT = path.join(__dirname, '..', 'static', 'fonts', 'ArchivoBlack-Regular.ttf');
+registerFont(FONT, { family: 'Archivo Black' });
+const DISP = '"Archivo Black"';
 
 const W = 1200;
 const H = 630;
@@ -59,7 +64,7 @@ ctx.textAlign = 'center';
 ctx.fillStyle = INK;
 ctx.font = 'bold 26px sans-serif';
 ctx.fillText('REAL OR', badgeX, badgeY - 28);
-ctx.font = 'bold 92px sans-serif';
+ctx.font = `92px ${DISP}`;
 ctx.fillText('AI?', badgeX, badgeY + 56);
 
 // Left-hand text block.
@@ -70,7 +75,7 @@ ctx.font = 'bold 24px sans-serif';
 ctx.fillText('R E A L   O R   A I ?   ·   D A I L Y   5   +   E N D L E S S', 92, 150);
 
 ctx.fillStyle = '#FFFFFF';
-ctx.font = 'bold 150px sans-serif';
+ctx.font = `150px ${DISP}`;
 ctx.fillText('DUPED', 88, 300);
 const dupedWidth = ctx.measureText('DUPED').width;
 ctx.fillStyle = TAG;
