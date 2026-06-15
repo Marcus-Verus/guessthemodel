@@ -191,6 +191,26 @@ export async function setItemImage(
 	return { ok: true, items };
 }
 
+/** Remove a card's image (back to emoji). Reals also drop the saved override. */
+export async function clearItemImage(
+	day: number,
+	index: number
+): Promise<{ ok: boolean; items?: Product[] }> {
+	const s = await loadStored(day);
+	if (!s) return { ok: false };
+	if (index < 0 || index >= s.items.length) return { ok: false };
+	const items = s.items.map((it, i) => {
+		if (i !== index) return it;
+		const { img: _drop, ...rest } = it;
+		return rest as Product;
+	});
+	await s.c.from('daily_puzzles').upsert({ day, category: s.category, items, live: s.live }, { onConflict: 'day' });
+	if (s.items[index].isReal) {
+		await s.c.from('product_images').delete().eq('name', s.items[index].name);
+	}
+	return { ok: true, items };
+}
+
 /** (Re)generate just the image for one card, keeping the product itself. */
 export async function regenItemImage(
 	day: number,
