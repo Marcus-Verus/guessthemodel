@@ -1,168 +1,488 @@
 <script lang="ts">
-	import type { PageData } from './$types';
-	import BattleFlow from '$lib/components/BattleFlow.svelte';
-	import HumanOrAI from '$lib/components/HumanOrAI.svelte';
-	import CategoryNav from '$lib/components/CategoryNav.svelte';
-	import StatsRow from '$lib/components/StatsRow.svelte';
-	import StreakBadge from '$lib/components/StreakBadge.svelte';
-	import ModelStandings from '$lib/components/ModelStandings.svelte';
-	import Countdown from '$lib/components/Countdown.svelte';
-	import { CATEGORY_LABELS } from '$lib/types';
+	import { SITE_NAME, SITE_URL, OG_IMAGE } from '$lib/seo';
+	import {
+		CATEGORIES,
+		REAL_PRODUCTS,
+		buildDailyRounds,
+		buildEndlessDeck,
+		todaysCategory,
+		tomorrowsCategory,
+		type Product
+	} from '$lib/duped';
 
-	let { data }: { data: PageData } = $props();
+	type Phase = 'title' | 'loading' | 'play' | 'results' | 'endlessOver';
+	type Mode = 'daily' | 'endless';
+	interface Guess {
+		correct: boolean;
+		isReal: boolean;
+		name: string;
+	}
+
+	let phase = $state<Phase>('title');
+	let mode = $state<Mode>('daily');
+	let rounds = $state<Product[]>([]); // daily rounds OR endless deck
+	let idx = $state(0);
+	let guesses = $state<Guess[]>([]);
+	let revealed = $state(false);
+	let strikes = $state(0);
+	let run = $state(0);
+	let bestRun = $state(0);
+	let streak = $state(0);
+	let games = $state(0);
+	let copied = $state(false);
+	let usedLive = $state(false);
+	let saved = $state<Product[]>([]); // array of real products
+
+	// Cache of live fakes per category id — a plain (non-reactive) ref.
+	const liveCache: Record<string, Product[] | null> = {};
+	const cat = todaysCategory();
+	const tomorrow = tomorrowsCategory();
+
+	const score = $derived(guesses.filter((g) => g.correct).length);
+	const p = $derived<Product | undefined>(rounds[idx]);
+	const lastGuess = $derived<Guess | undefined>(guesses[guesses.length - 1]);
+	const realsThisGame = $derived<Product[]>(
+		mode === 'daily'
+			? rounds.filter((r) => r.isReal)
+			: guesses
+					.filter((g) => g.isReal)
+					.map((g) => REAL_PRODUCTS.find((rp) => rp.name === g.name))
+					.filter((x): x is Product => Boolean(x))
+	);
+
+	async function fetchFakes(catLabel: string): Promise<Product[] | null> {
+		try {
+			const res = await fetch('/api/fakes', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ category: catLabel })
+			});
+			if (!res.ok) return null;
+			const data = await res.json();
+			return Array.isArray(data.fakes) && data.fakes.length >= 3 ? data.fakes : null;
+		} catch {
+			return null;
+		}
+	}
+
+	async function startDaily() {
+		mode = 'daily';
+		phase = 'loading';
+		copied = false;
+		let fakes = liveCache[cat.id];
+		if (!fakes) {
+			fakes = await Promise.race([
+				fetchFakes(cat.label),
+				new Promise<null>((r) => setTimeout(() => r(null), 9000))
+			]);
+		}
+		usedLive = !!fakes;
+		liveCache[cat.id] = null;
+		rounds = buildDailyRounds(cat, fakes);
+		idx = 0;
+		guesses = [];
+		revealed = false;
+		phase = 'play';
+	}
+
+	function startEndless() {
+		mode = 'endless';
+		copied = false;
+		const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
+		rounds = buildEndlessDeck(extras);
+		idx = 0;
+		guesses = [];
+		strikes = 0;
+		run = 0;
+		revealed = false;
+		phase = 'play';
+	}
+
+	// Pre-warm fakes for today's category while playing.
+	$effect(() => {
+		if (phase === 'play' && !liveCache[cat.id]) {
+			fetchFakes(cat.label).then((f) => {
+				if (f) liveCache[cat.id] = f;
+			});
+		}
+	});
+
+	function guess(saidReal: boolean) {
+		if (revealed || !p) return;
+		const cur = p;
+		const correct = saidReal === cur.isReal;
+		guesses = [...guesses, { correct, isReal: !!cur.isReal, name: cur.name }];
+		if (mode === 'endless') {
+			if (correct) {
+				run += 1;
+				if (run > bestRun) bestRun = run;
+			} else {
+				strikes += 1;
+			}
+		}
+		revealed = true;
+	}
+
+	function next() {
+		if (mode === 'endless') {
+			if (strikes >= 3) {
+				phase = 'endlessOver';
+				return;
+			}
+			if (idx + 1 >= rounds.length) {
+				// reshuffle a fresh deck and keep going
+				const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
+				rounds = buildEndlessDeck(extras);
+				idx = 0;
+			} else {
+				idx += 1;
+			}
+			revealed = false;
+			return;
+		}
+		if (idx + 1 >= rounds.length) {
+			streak = score >= 4 ? streak + 1 : 0;
+			games += 1;
+			phase = 'results';
+		} else {
+			idx += 1;
+			revealed = false;
+		}
+	}
+
+	function toggleSave(prod: Product) {
+		saved = saved.find((x) => x.name === prod.name)
+			? saved.filter((x) => x.name !== prod.name)
+			: [...saved, prod];
+	}
+	const isSaved = (prod: Product) => saved.some((x) => x.name === prod.name);
+
+	function shareText(): string {
+		if (mode === 'endless') {
+			return `Duped ∞ survived ${run} in a row 🤖 (best ${bestRun})\nduped.gg`;
+		}
+		const grid = guesses.map((g) => (g.correct ? '🟩' : '🟥')).join('');
+		const fooled = guesses.find((g) => !g.correct);
+		const tail = fooled ? `duped by “${fooled.name}”` : 'un-dupable 😎';
+		const fire = streak > 0 ? ` 🔥${streak}` : '';
+		return `Duped ${cat.emoji} ${grid} ${score}/5${fire} — ${tail}\nduped.gg`;
+	}
+
+	async function copyShare() {
+		const txt = shareText();
+		try {
+			await navigator.clipboard.writeText(txt);
+			copied = true;
+		} catch {
+			const ta = document.createElement('textarea');
+			ta.value = txt;
+			document.body.appendChild(ta);
+			ta.select();
+			try {
+				document.execCommand('copy');
+				copied = true;
+			} finally {
+				document.body.removeChild(ta);
+			}
+		}
+		setTimeout(() => (copied = false), 2200);
+	}
+
+	function catLabelFor(id: string): string {
+		return CATEGORIES.find((c) => c.id === id)?.label || 'AI Original';
+	}
+
+	const title = `${SITE_NAME} — Real or AI?`;
+	const description =
+		'Ridiculous products. Some are really sold on Amazon. Some were invented by an AI thirty seconds ago. Daily 5 + endless survival. Don’t get duped.';
 </script>
 
 <svelte:head>
-	<title>{data.meta.title}</title>
-	<meta name="description" content={data.meta.description} />
-	<link rel="canonical" href={data.meta.canonical} />
-
+	<title>{title}</title>
+	<meta name="description" content={description} />
+	<link rel="canonical" href={SITE_URL} />
 	<meta property="og:type" content="website" />
-	<meta property="og:site_name" content="GuessTheModel" />
-	<meta property="og:title" content={data.meta.title} />
-	<meta property="og:description" content={data.meta.description} />
-	<meta property="og:url" content={data.meta.canonical} />
-	<meta property="og:image" content={data.meta.ogImage} />
+	<meta property="og:site_name" content={SITE_NAME} />
+	<meta property="og:title" content={title} />
+	<meta property="og:description" content={description} />
+	<meta property="og:url" content={SITE_URL} />
+	<meta property="og:image" content={OG_IMAGE} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="GuessTheModel — the daily AI guessing game" />
-
+	<meta property="og:image:alt" content="DUPED — real Amazon products vs. AI fakes" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={data.meta.title} />
-	<meta name="twitter:description" content={data.meta.description} />
-	<meta name="twitter:image" content={data.meta.ogImage} />
+	<meta name="twitter:title" content={title} />
+	<meta name="twitter:description" content={description} />
+	<meta name="twitter:image" content={OG_IMAGE} />
 </svelte:head>
 
-<div class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
+{#snippet stars(rating: number)}
+	<span class="stars" aria-label={`${rating} out of 5 stars`}>
+		{#each [1, 2, 3, 4, 5] as i (i)}
+			<span style="opacity:{i <= Math.round(rating) ? 1 : 0.25}">★</span>
+		{/each}
+		<span class="rating-num">{rating.toFixed(1)}</span>
+	</span>
+{/snippet}
 
-	<!-- Slim hero — the game is the hero -->
-	<div class="mb-6">
-		<div class="flex items-center gap-3 flex-wrap mb-3">
-			{#if data.deck}
-				<span class="label">Daily #{data.deckNumber > 0 ? data.deckNumber : 1}</span>
-				{#if data.deckTheme}
-					<span class="text-xs px-2 py-0.5 rounded-full bg-[#C3F73A10] border border-[#C3F73A30] text-[#C3F73A]">
-						{data.deckTheme.label}
-					</span>
-				{/if}
-			{:else}
-				<span class="label">Daily battle{data.battleNumber > 0 ? ` #${data.battleNumber}` : ''}</span>
-			{/if}
-			<span class="ml-auto"><Countdown /></span>
-		</div>
-		<h1 class="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2">
-			{#if data.deck}
-				Can you tell <em class="text-[#C3F73A] not-italic">what's human?</em>
-			{:else}
-				Can you tell <em class="text-[#C3F73A] not-italic">which AI wrote it?</em>
-			{/if}
-		</h1>
-		<StreakBadge />
-	</div>
-
-	<!-- The daily game — Human or AI -->
-	{#if data.deck}
-		<div class="mb-8">
-			<div class="card p-5 sm:p-6">
-				<HumanOrAI deck={data.deck} deckNumber={data.deckNumber} tagline={data.deckTheme?.tagline ?? ''} />
-			</div>
-		</div>
-
-		<!-- Survival mode -->
-		<a
-			href="/survival"
-			class="block mb-4 card p-5 border-[#C3F73A30] hover:border-[#C3F73A] transition-colors group"
-		>
-			<div class="flex items-center justify-between gap-4">
-				<div class="min-w-0">
-					<p class="text-[10px] font-bold tracking-widest uppercase text-[#C3F73A] mb-1">Survival</p>
-					<p class="text-white font-semibold text-sm group-hover:text-[#C3F73A] transition-colors">
-						One wrong answer and you're out. How far can you get?
-					</p>
-				</div>
-				<span class="text-[#6E7681] group-hover:text-[#C3F73A] transition-colors shrink-0">→</span>
-			</div>
-		</a>
-
-		<!-- Expert mode: the 5-model battle -->
-		{#if data.daily}
-			<a
-				href="/battle/{data.daily.id}"
-				class="block mb-12 card p-5 border-[#D2A8FF30] hover:border-[#D2A8FF] transition-colors group"
-			>
-				<div class="flex items-center justify-between gap-4">
-					<div class="min-w-0">
-						<p class="text-[10px] font-bold tracking-widest uppercase text-[#D2A8FF] mb-1">Expert mode</p>
-						<p class="text-white font-semibold text-sm group-hover:text-[#D2A8FF] transition-colors">
-							5 AIs answered the same prompt. Guess WHO wrote WHAT.
-						</p>
-						<p class="text-[#6E7681] text-xs mt-1 truncate">"{data.daily.prompt}"</p>
-					</div>
-					<span class="text-[#6E7681] group-hover:text-[#D2A8FF] transition-colors shrink-0">→</span>
-				</div>
-			</a>
+{#snippet productPhoto(emoji: string | undefined, img: string | undefined, small: boolean)}
+	<div class="photo {small ? 'photo-sm' : ''}" aria-hidden="true">
+		{#if img}
+			<img class="photo-img" src={img} alt="" />
+		{:else}
+			<span class="photo-emoji">{emoji || '📦'}</span>
 		{/if}
-	{:else if data.daily}
-		<!-- Fallback: no deck yet — the battle is the main event -->
-		<div class="mb-12">
-			<div class="card p-5 sm:p-6">
-				<BattleFlow battle={data.daily} battleNumber={data.battleNumber} />
+		<span class="photo-tag">PRODUCT PHOTO</span>
+	</div>
+{/snippet}
+
+{#snippet starburst(correct: boolean, isReal: boolean)}
+	<div class="burst {correct ? 'burst-good' : 'burst-bad'}">
+		<div class="burst-spin" aria-hidden="true"></div>
+		<div class="burst-label">
+			<div class="burst-top">{correct ? 'CLOCKED IT' : 'DUPED!'}</div>
+			<div class="burst-main">{isReal ? 'REAL' : 'AI'}</div>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet shopList(items: Product[], heading: string)}
+	{#if items.length}
+		<div class="realshop">
+			<h3>{heading}</h3>
+			{#each items as r (r.name)}
+				<div class="shopitem">
+					<span class="em">{r.emoji}</span>
+					<span class="nm">
+						{r.name}<br />
+						<span class="price">{r.price}</span>
+					</span>
+					<button
+						class="heart {isSaved(r) ? 'heart-on' : ''}"
+						onclick={() => toggleSave(r)}
+						aria-label={isSaved(r) ? 'Remove from saved finds' : 'Save this find'}
+					>
+						{isSaved(r) ? '♥' : '♡'}
+					</button>
+					{#if r.buy}
+						<a class="go" href={r.buy} target="_blank" rel="noopener noreferrer">AMAZON →</a>
+					{/if}
+				</div>
+			{/each}
+			<p class="disclose">
+				As an Amazon Associate, duped.gg may earn from qualifying purchases.
+			</p>
+		</div>
+	{/if}
+{/snippet}
+
+<div class="gtm-root">
+	{#if phase !== 'title'}
+		<header class="topbar">
+			<div class="disp logo">
+				DUPED
+				<small>
+					{mode === 'endless'
+						? 'ENDLESS · 3 STRIKES'
+						: `${cat.emoji} ${cat.label.toUpperCase()}`}
+				</small>
+			</div>
+			{#if mode === 'endless' && phase === 'play'}
+				<div class="endlesshud">
+					<span>RUN {run}</span>
+					{#each [0, 1, 2] as i (i)}
+						<span class="x {i < strikes ? 'hit' : ''}">✕</span>
+					{/each}
+				</div>
+			{:else}
+				<div class="dots" aria-label="round progress">
+					{#each [0, 1, 2, 3, 4] as i (i)}
+						{@const g = guesses[i]}
+						<span
+							class="dot {g
+								? g.correct
+									? 'on-good'
+									: 'on-bad'
+								: i === idx && phase === 'play'
+									? 'now'
+									: ''}"
+						></span>
+					{/each}
+				</div>
+			{/if}
+		</header>
+	{/if}
+
+	{#if phase === 'title'}
+		<div class="title-wrap">
+			<div class="burst title-burst">
+				<div class="burst-spin" aria-hidden="true"></div>
+				<div class="burst-label">
+					<div class="burst-top">REAL OR</div>
+					<div class="burst-main">AI?</div>
+				</div>
+			</div>
+			<h1 class="disp h1">DUPED<em>.</em></h1>
+			<p class="sub">
+				Ridiculous products. Some are really sold on Amazon. Some were invented by an AI thirty
+				seconds ago. Don't get duped.
+			</p>
+			<div class="catline">
+				TODAY'S CATEGORY: {cat.emoji} {cat.label.toUpperCase()}
+			</div>
+			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
+			<button class="endlessbtn" onclick={startEndless}>∞ ENDLESS — 3 STRIKES AND OUT</button>
+			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
+			{#if saved.length > 0}
+				<div class="savedwrap">
+					{@render shopList(saved, `♥ SAVED FINDS (${saved.length})`)}
+				</div>
+			{/if}
+			<footer class="footer">
+				duped.gg · contact: <a href="mailto:mark@duped.gg">mark@duped.gg</a>
+			</footer>
+		</div>
+	{/if}
+
+	{#if phase === 'loading'}
+		<div class="loadwrap">
+			<div class="spinner" aria-hidden="true"></div>
+			<div class="disp" style="font-size:17px">
+				AN AI IS INVENTING {cat.label.toUpperCase()}…
+			</div>
+			<p class="sub" style="margin-top:10px">Mixing them with real ones. No peeking.</p>
+		</div>
+	{/if}
+
+	{#if phase === 'play' && p && !revealed}
+		<div class="card" style="margin-top:26px">
+			<div class="pricetag">{p.price}</div>
+			<div class="eyebrow">
+				{mode === 'endless'
+					? `Streak ${run} · ${catLabelFor(p.cat)}`
+					: `Round ${idx + 1} of 5 · ${cat.label}`}
+			</div>
+			{@render productPhoto(p.emoji, p.img, false)}
+			<h2 class="disp pname">{p.name}</h2>
+			<p class="ptag">{p.tagline}</p>
+			{@render stars(p.rating)}
+			<div class="reviewbox">
+				<p>“{p.review}”</p>
+				<span>Verified purchase · helpful (1,204)</span>
 			</div>
 		</div>
-	{:else}
-		<div class="mb-12 card p-10 text-center">
-			<p class="text-[#8B949E]">No game scheduled for today. Check back tomorrow.</p>
+		<div class="btnrow">
+			<button class="vbtn real" onclick={() => guess(true)}>
+				REAL<small>YOU CAN BUY THIS</small>
+			</button>
+			<button class="vbtn ai" onclick={() => guess(false)}>
+				AI MADE IT<small>PURE INVENTION</small>
+			</button>
 		</div>
 	{/if}
 
-	<!-- Stats + benchmark -->
-	<div class="mb-12 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-		<StatsRow stats={data.stats} />
-		<ModelStandings rows={data.standings} totalBattles={data.stats.battles_run} />
-	</div>
-
-	<!-- Category nav + past battles -->
-	<div class="mb-6">
-		<CategoryNav active="all" />
-	</div>
-
-	{#if data.recent.filter(b => b.id !== data.daily?.id).length > 0}
-		<p class="label mb-3">Play the archive</p>
-		<div class="grid gap-3">
-			{#each data.recent.filter(b => b.id !== data.daily?.id) as battle}
-				<a
-					href="/battle/{battle.id}"
-					class="card p-4 hover:border-[#8B949E] transition-colors group"
+	{#if phase === 'play' && p && revealed && lastGuess}
+		<div class="reveal-card pop">
+			{@render starburst(lastGuess.correct, !!p.isReal)}
+			{@render productPhoto(p.emoji, p.img, true)}
+			<h2 class="disp pname" style="margin:6px 0 4px;font-size:20px">{p.name}</h2>
+			<p class="fact">{p.fact}</p>
+			<div class="crowd">
+				ONLY {p.crowd}% OF PLAYERS GOT THIS ONE
+				<div class="crowdbar">
+					<div style="width:{p.crowd}%"></div>
+				</div>
+			</div>
+			{#if p.isReal}
+				<button
+					class="heartcorner {isSaved(p) ? 'heart-on' : ''}"
+					onclick={() => toggleSave(p)}
+					aria-label={isSaved(p) ? 'Remove from saved finds' : 'Save this find'}
 				>
-					<div class="flex items-start justify-between gap-4">
-						<div class="flex-1 min-w-0">
-							<div class="flex items-center gap-2 mb-1">
-								<span class="label text-[10px]">{CATEGORY_LABELS[battle.category]}</span>
-							</div>
-							<p class="text-white text-sm font-medium truncate group-hover:text-[#C3F73A] transition-colors">
-								"{battle.prompt}"
-							</p>
-							<p class="text-[#6E7681] text-xs mt-1">
-								{new Date(battle.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-							</p>
-						</div>
-						<span class="text-[#6E7681] group-hover:text-[#C3F73A] transition-colors shrink-0 mt-0.5">→</span>
-					</div>
+					{isSaved(p) ? '♥' : '♡'}
+				</button>
+			{/if}
+			{#if p.isReal && p.buy}
+				<a class="buybtn" href={p.buy} target="_blank" rel="noopener noreferrer">
+					IT'S REALLY ON AMAZON →<small>SEE FOR YOURSELF</small>
 				</a>
-			{/each}
+			{/if}
+			<button class="nextbtn" onclick={next}>
+				{mode === 'endless'
+					? strikes >= 3
+						? 'GAME OVER →'
+						: 'NEXT →'
+					: idx + 1 >= rounds.length
+						? 'SEE MY RESULTS'
+						: 'NEXT PRODUCT →'}
+			</button>
 		</div>
 	{/if}
 
-	<!-- Footer -->
-	<div class="mt-12 pt-6 border-t border-[#21262D] flex flex-wrap items-center justify-between gap-4">
-		<p class="text-[#6E7681] text-xs">The daily game that benchmarks AI with human eyes.</p>
-		<div class="flex items-center gap-5 text-xs text-[#6E7681]">
-			<a href="/weekly" class="hover:text-[#8B949E] transition-colors">Weekly</a>
-			<a href="/leaderboard" class="hover:text-[#8B949E] transition-colors">Leaderboard</a>
-			<a href="/methodology" class="hover:text-[#8B949E] transition-colors">Methodology</a>
-			<a href="/press" class="hover:text-[#8B949E] transition-colors">Press</a>
-			<a href="/faq" class="hover:text-[#8B949E] transition-colors">FAQ</a>
+	{#if phase === 'results'}
+		<div class="card" style="margin-top:30px;text-align:center">
+			<div class="eyebrow">FINAL VERDICT · {cat.label.toUpperCase()}</div>
+			<div class="disp scoreline">
+				{score}<span>/5</span>
+			</div>
+			<div class="grid" aria-label="result grid">
+				{#each guesses as g, i (i)}
+					<span>{g.correct ? '🟩' : '🟥'}</span>
+				{/each}
+			</div>
+			{#if guesses.find((g) => !g.correct)}
+				<p class="fooledby">
+					Duped by <b>“{guesses.find((g) => !g.correct)?.name}”</b>
+				</p>
+			{:else}
+				<p class="fooledby">Un-dupable. The machines couldn't touch you. 😎</p>
+			{/if}
+			<div class="statrow">
+				<div class="stat">
+					<b>{streak}</b>
+					<small>WIN STREAK</small>
+				</div>
+				<div class="stat">
+					<b>{games}</b>
+					<small>GAMES PLAYED</small>
+				</div>
+				<div class="stat">
+					<b>{bestRun}</b>
+					<small>BEST ∞ RUN</small>
+				</div>
+			</div>
+			<button class="sharebtn" onclick={copyShare}>
+				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY SHARE GRID'}
+			</button>
+			<button class="againbtn" onclick={startEndless}>∞ KEEP GOING — ENDLESS MODE</button>
+			<button class="againbtn" onclick={startDaily}>REPLAY {cat.label.toUpperCase()}</button>
+			<div class="tmrw">
+				TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()} — COME BACK
+			</div>
+			{@render shopList(realsThisGame, 'THE REAL ONES — YES, ACTUALLY FOR SALE')}
+			<div class="live">
+				{usedLive
+					? "This round's fakes were generated live by Claude."
+					: 'Played with the house collection of fakes.'}
+			</div>
 		</div>
-	</div>
+	{/if}
 
+	{#if phase === 'endlessOver'}
+		<div class="card" style="margin-top:30px;text-align:center">
+			<div class="eyebrow">ENDLESS · GAME OVER</div>
+			<div class="disp scoreline">
+				{run}<span> in a row</span>
+			</div>
+			<p class="fooledby">
+				Three strikes. Best run this session: <b>{bestRun}</b>.
+			</p>
+			<button class="sharebtn" onclick={copyShare}>
+				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY MY RUN'}
+			</button>
+			<button class="againbtn" onclick={startEndless}>∞ RUN IT BACK</button>
+			<button class="againbtn" onclick={startDaily}>BACK TO TODAY'S 5</button>
+			{@render shopList(realsThisGame, 'REAL ONES YOU MET THIS RUN')}
+		</div>
+	{/if}
 </div>
