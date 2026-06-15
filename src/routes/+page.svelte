@@ -211,9 +211,20 @@
 	}
 
 	async function copyShare() {
-		track('share', { method: 'copy', mode, score });
-		logEvent('share', { mode });
 		const txt = shareText();
+		logEvent('share', { mode });
+		// On mobile, open the native share sheet (big for the Reddit/mobile crowd).
+		if (typeof navigator !== 'undefined' && navigator.share) {
+			try {
+				track('share', { method: 'native', mode, score });
+				await navigator.share({ text: txt });
+				return;
+			} catch (err) {
+				// User cancelled the sheet - don't fall through to clipboard.
+				if (err instanceof Error && err.name === 'AbortError') return;
+			}
+		}
+		track('share', { method: 'copy', mode, score });
 		try {
 			await navigator.clipboard.writeText(txt);
 			copied = true;
