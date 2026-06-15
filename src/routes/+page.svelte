@@ -192,9 +192,29 @@
 		return CATEGORIES.find((c) => c.id === id)?.label || 'AI Original';
 	}
 
-	const title = `${SITE_NAME} — Real or AI?`;
+	// SERP-tuned: title ~51 chars (<580px), description ~150 chars (<920px).
+	const title = 'DUPED — Real Amazon Finds vs. AI Fakes | Daily Game';
 	const description =
-		'Ridiculous products. Some are really sold on Amazon. Some were invented by an AI thirty seconds ago. Daily 5 + endless survival. Don’t get duped.';
+		'Real Amazon products or AI fakes? Some are genuinely for sale, some an AI just invented. Play the daily 5 and endless survival — don’t get duped.';
+
+	// Structured data for Google/Bing. Split the closing tag so the .svelte
+	// parser doesn't end the component script early.
+	const jsonLd =
+		'<script type="application/ld+json">' +
+		JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'WebApplication',
+			name: SITE_NAME,
+			alternateName: 'duped.gg',
+			url: SITE_URL,
+			description,
+			applicationCategory: 'GameApplication',
+			operatingSystem: 'Any (web browser)',
+			browserRequirements: 'Requires JavaScript.',
+			image: OG_IMAGE,
+			offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }
+		}) +
+		'<\/script>';
 </script>
 
 <svelte:head>
@@ -214,6 +234,7 @@
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
 	<meta name="twitter:image" content={OG_IMAGE} />
+	{@html jsonLd}
 </svelte:head>
 
 {#snippet stars(rating: number)}
@@ -270,7 +291,8 @@
 				</div>
 			{/each}
 			<p class="disclose">
-				As an Amazon Associate, duped.gg may earn from qualifying purchases.
+				As an Amazon Associate, duped.gg earns from qualifying purchases. Prices are
+				approximate and shown for the game — check Amazon for the current price.
 			</p>
 		</div>
 	{/if}
@@ -340,6 +362,10 @@
 			{/if}
 			<footer class="footer">
 				duped.gg · contact: <a href="mailto:mark@duped.gg">mark@duped.gg</a>
+				<br />
+				<span style="opacity:.8">
+					As an Amazon Associate, duped.gg earns from qualifying purchases.
+				</span>
 			</footer>
 		</div>
 	{/if}
