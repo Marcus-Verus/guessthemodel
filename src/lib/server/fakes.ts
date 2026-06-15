@@ -26,7 +26,9 @@ Names under 4 words. Ratings between 3.7 and 4.8.`;
 async function viaOpenRouter(prompt: string): Promise<string | null> {
 	const key = env.OPENROUTER_API_KEY;
 	if (!key) return null;
-	const model = env.OPENROUTER_MODEL || OPENROUTER_MODEL_DEFAULT;
+	// Guard against the API key being pasted into the model var by mistake.
+	const configured = env.OPENROUTER_MODEL;
+	const model = configured && !configured.startsWith('sk-') ? configured : OPENROUTER_MODEL_DEFAULT;
 	try {
 		const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
