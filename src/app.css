@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------
-   DUPED — duped.gg global styles
+   DUPED - duped.gg global styles
    --------------------------------------------------------------- */
 
 @font-face {
@@ -520,6 +520,16 @@ body {
 	letter-spacing: 0.14em;
 	color: #8fa0f2;
 	font-weight: 700;
+}
+.archivelink {
+	display: inline-block;
+	margin-top: 14px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: #c9d2ff;
+	text-decoration: none;
+	border-bottom: 1px solid rgba(201, 210, 255, 0.4);
 }
 .loadwrap {
 	padding-top: 22vh;

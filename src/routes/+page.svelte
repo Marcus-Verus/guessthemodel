@@ -1,16 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { PageData } from './$types';
 	import { SITE_NAME, SITE_URL, OG_IMAGE } from '$lib/seo';
 	import {
 		CATEGORIES,
 		REAL_PRODUCTS,
 		buildDailyRounds,
 		buildEndlessDeck,
-		dailyNumber,
-		todaysCategory,
+		revealLabel,
 		tomorrowsCategory,
 		type Product
 	} from '$lib/duped';
+
+	let { data }: { data: PageData } = $props();
 
 	type Phase = 'title' | 'loading' | 'play' | 'results' | 'endlessOver';
 	type Mode = 'daily' | 'endless';
@@ -37,12 +39,12 @@
 	let playedDay = $state(0); // day index of the last completed daily
 	let hydrated = $state(false); // localStorage loaded?
 
-	const cat = todaysCategory();
+	const cat = $derived(data.daily.category); // category of the loaded puzzle (today, or an archive day)
 	const tomorrow = tomorrowsCategory();
 	const today = Math.floor(Date.now() / 86400000);
 
 	// Persist brag-state (streak/games/best run/saved finds + played-today)
-	// across reloads — the whole point of a daily streak.
+	// across reloads - the whole point of a daily streak.
 	const STORE_KEY = 'duped:v1';
 	onMount(() => {
 		try {
@@ -59,14 +61,16 @@
 			/* ignore corrupt storage */
 		}
 		hydrated = true;
+		// Archive links (?day=N) jump straight into that day's puzzle.
+		if (data.isArchive) startDaily();
 	});
 	$effect(() => {
 		if (!hydrated || typeof localStorage === 'undefined') return;
-		const data = JSON.stringify({ streak, games, bestRun, saved, playedDay });
+		const snapshot = JSON.stringify({ streak, games, bestRun, saved, playedDay });
 		try {
-			localStorage.setItem(STORE_KEY, data);
+			localStorage.setItem(STORE_KEY, snapshot);
 		} catch {
-			/* quota/private mode — ignore */
+			/* quota/private mode - ignore */
 		}
 	});
 
@@ -82,25 +86,15 @@
 					.filter((x): x is Product => Boolean(x))
 	);
 
-	async function startDaily() {
+	function startDaily() {
 		track('play_game', { mode: 'daily', category: cat.id });
 		logEvent('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
-		phase = 'loading';
 		copied = false;
-		// The daily puzzle is the same #N for everyone — fetch the shared one.
-		try {
-			const res = await fetch('/api/daily');
-			const data = await res.json();
-			rounds =
-				Array.isArray(data.items) && data.items.length
-					? (data.items as Product[])
-					: buildDailyRounds(cat, null);
-			usedLive = !!data.live;
-		} catch {
-			rounds = buildDailyRounds(cat, null);
-			usedLive = false;
-		}
+		// The puzzle is preloaded and shared (same #N for everyone), so this is
+		// instant - no spinner.
+		rounds = data.daily.items.length ? data.daily.items : buildDailyRounds(cat, null);
+		usedLive = data.daily.live;
 		idx = 0;
 		guesses = [];
 		revealed = false;
@@ -163,9 +157,9 @@
 			return;
 		}
 		if (idx + 1 >= rounds.length) {
-			// Streak/games only move on the first daily completion of the day,
-			// so replaying today can't farm the streak.
-			if (playedDay !== today) {
+			// Streak/games only move on the first completion of TODAY's puzzle, so
+			// replaying or playing the archive can't farm the streak.
+			if (!data.isArchive && playedDay !== today) {
 				streak = score >= 4 ? streak + 1 : 0;
 				games += 1;
 				playedDay = today;
@@ -209,7 +203,7 @@
 		const fire = streak > 0 ? ` 🔥${streak}` : '';
 		const tail = fooled ? `Duped by “${fooled.name}” 😅` : 'Un-dupable 😎';
 		return [
-			`DUPED #${dailyNumber()}`,
+			`DUPED #${data.daily.number}`,
 			`${grid}  ${score}/5${fire}`,
 			tail,
 			'Play free → duped.gg'
@@ -275,7 +269,7 @@
 	}
 
 	let email = $state('');
-	let botField = $state(''); // honeypot — real users never fill this
+	let botField = $state(''); // honeypot - real users never fill this
 	let subscribing = $state(false);
 	let subscribed = $state(false);
 
@@ -372,11 +366,11 @@
 	</div>
 {/snippet}
 
-{#snippet starburst(correct: boolean, isReal: boolean)}
+{#snippet starburst(correct: boolean, isReal: boolean, label: string)}
 	<div class="burst {correct ? 'burst-good' : 'burst-bad'}">
 		<div class="burst-spin" aria-hidden="true"></div>
 		<div class="burst-label">
-			<div class="burst-top">{correct ? 'CLOCKED IT' : 'DUPED!'}</div>
+			<div class="burst-top">{label}</div>
 			<div class="burst-main">{isReal ? 'REAL' : 'AI'}</div>
 		</div>
 	</div>
@@ -413,7 +407,7 @@
 			{/each}
 			<p class="disclose">
 				As an Amazon Associate, duped.gg earns from qualifying purchases. Prices are
-				approximate and shown for the game — check Amazon for the current price.
+				approximate and shown for the game - check Amazon for the current price.
 			</p>
 		</div>
 	{/if}
@@ -421,7 +415,7 @@
 
 {#snippet emailCapture()}
 	{#if subscribed}
-		<p class="subnote">Thanks — see you tomorrow. 👋</p>
+		<p class="subnote">Thanks! See you tomorrow. 👋</p>
 	{:else}
 		<form class="emailform" onsubmit={submitEmail}>
 			<input
@@ -444,7 +438,7 @@
 				{subscribing ? '…' : 'NOTIFY ME'}
 			</button>
 		</form>
-		<p class="subnote">Get tomorrow's category — a daily nudge, no spam.</p>
+		<p class="subnote">Get tomorrow's category. A quick heads-up, no spam.</p>
 	{/if}
 {/snippet}
 
@@ -500,10 +494,11 @@
 				seconds ago. Don't get duped.
 			</p>
 			<div class="catline">
-				TODAY'S CATEGORY: {cat.emoji} {cat.label.toUpperCase()}
+				DUPED #{data.daily.number} · {cat.emoji} {cat.label.toUpperCase()}
 			</div>
 			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
 			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
+			<a class="archivelink" href="/archive">▦ Past days</a>
 
 			{#if saved.length > 0}
 				<div class="savedwrap">
@@ -520,23 +515,13 @@
 		</div>
 	{/if}
 
-	{#if phase === 'loading'}
-		<div class="loadwrap">
-			<div class="spinner" aria-hidden="true"></div>
-			<div class="disp" style="font-size:17px">
-				AN AI IS INVENTING {cat.label.toUpperCase()}…
-			</div>
-			<p class="sub" style="margin-top:10px">Mixing them with real ones. No peeking.</p>
-		</div>
-	{/if}
-
 	{#if phase === 'play' && p && !revealed}
 		<div class="card" style="margin-top:26px">
 			<div class="pricetag">{p.price}</div>
 			<div class="eyebrow">
 				{mode === 'endless'
 					? `Streak ${run} · ${catLabelFor(p.cat)}`
-					: `Round ${idx + 1} of 5 · ${cat.label}`}
+					: `DUPED #${data.daily.number} · Round ${idx + 1} of 5`}
 			</div>
 			{@render productPhoto(p.emoji, p.img, false)}
 			<h2 class="disp pname">{p.name}</h2>
@@ -559,7 +544,7 @@
 
 	{#if phase === 'play' && p && revealed && lastGuess}
 		<div class="reveal-card pop">
-			{@render starburst(lastGuess.correct, !!p.isReal)}
+			{@render starburst(lastGuess.correct, !!p.isReal, revealLabel(lastGuess.correct, guesses.length - 1))}
 			{@render productPhoto(p.emoji, p.img, true)}
 			<h2 class="disp pname" style="margin:6px 0 4px;font-size:20px">{p.name}</h2>
 			<p class="fact">{p.fact}</p>
@@ -621,12 +606,12 @@
 			{/if}
 
 			<!-- The payoff first: the real ones are actually for sale. -->
-			{@render shopList(realsThisGame, 'WAIT, THESE ARE REAL — SHOP THEM')}
+			{@render shopList(realsThisGame, 'WAIT, THESE ARE REAL - SHOP THEM')}
 
 			<button class="sharebtn" onclick={copyShare}>
 				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY SHARE GRID'}
 			</button>
-			<button class="againbtn" onclick={startEndless}>∞ KEEP GOING — ENDLESS MODE</button>
+			<button class="againbtn" onclick={startEndless}>∞ KEEP GOING - ENDLESS MODE</button>
 			<button class="againbtn" onclick={startDaily}>REPLAY {cat.label.toUpperCase()}</button>
 
 			<div class="statrow">
@@ -643,9 +628,13 @@
 					<small>BEST ∞ RUN</small>
 				</div>
 			</div>
-			<div class="tmrw">
-				TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()}
-			</div>
+			{#if data.isArchive}
+				<a class="tmrw" href="/" style="text-decoration:none">▦ BACK TO TODAY'S</a>
+			{:else}
+				<div class="tmrw">
+					TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()}
+				</div>
+			{/if}
 			{@render emailCapture()}
 		</div>
 	{/if}
@@ -659,7 +648,7 @@
 			<p class="fooledby">
 				Three strikes. Best run this session: <b>{bestRun}</b>.
 			</p>
-			{@render shopList(realsThisGame, 'REAL ONES YOU MET — SHOP THEM')}
+			{@render shopList(realsThisGame, 'REAL ONES YOU MET - SHOP THEM')}
 			<button class="sharebtn" onclick={copyShare}>
 				{copied ? 'COPIED! PASTE IT IN THE CHAT' : 'COPY MY RUN'}
 			</button>
