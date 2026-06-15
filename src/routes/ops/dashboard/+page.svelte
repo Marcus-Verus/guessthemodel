@@ -126,7 +126,7 @@
 		{#if seedMsg}<span class="seedmsg">{seedMsg}</span>{/if}
 		<div class="week">
 			{#each data.upcoming as d (d.number)}
-				<div class="day {d.isToday ? 'today' : ''}">
+				<a class="day {d.isToday ? 'today' : ''}" href={`/ops/day?n=${d.number}`}>
 					<div class="day-head">
 						<span class="dn">#{d.number}{d.isToday ? ' · TODAY' : ''}</span>
 						<span class="ds {d.seeded ? 'on' : 'off'}">{d.seeded ? '● ready' : '○ on-demand'}</span>
@@ -144,7 +144,8 @@
 					{:else}
 						<p class="pending">Generates on first play. Pre-seed to preview.</p>
 					{/if}
-				</div>
+					<span class="review-link">Review →</span>
+				</a>
 			{/each}
 		</div>
 
@@ -273,13 +274,28 @@
 		margin-top: 10px;
 	}
 	.day {
+		display: block;
 		background: #161b22;
 		border: 1px solid #232a33;
 		border-radius: 12px;
 		padding: 12px;
+		color: inherit;
+		text-decoration: none;
+		transition: border-color 0.12s, background 0.12s;
+	}
+	.day:hover {
+		border-color: #3a4656;
+		background: #1b212b;
 	}
 	.day.today {
 		border-color: #1230bf;
+	}
+	.review-link {
+		display: block;
+		margin-top: 8px;
+		font-size: 11px;
+		font-weight: 700;
+		color: #8fa6ff;
 	}
 	.day-head {
 		display: flex;
