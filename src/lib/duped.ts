@@ -205,15 +205,40 @@ function withCrowd(p: Product): Product {
 }
 
 export function buildDailyRounds(cat: Category, liveFakes: Product[] | null): Product[] {
+	const used = new Set<string>();
+	// Take up to n items with distinct names (no duplicate cards in a day).
+	const take = (arr: Product[], n: number, isReal: boolean): Product[] => {
+		const out: Product[] = [];
+		for (const p of shuffle(arr)) {
+			if (out.length >= n) break;
+			if (used.has(p.name)) continue;
+			used.add(p.name);
+			out.push({ ...p, isReal });
+		}
+		return out;
+	};
+
 	const realCount = Math.random() < 0.5 ? 2 : 3;
-	const reals = shuffle(REAL_PRODUCTS.filter((p) => p.cat === cat.id))
-		.slice(0, realCount)
-		.map((p) => ({ ...p, isReal: true }));
+	const reals = take(
+		REAL_PRODUCTS.filter((p) => p.cat === cat.id),
+		realCount,
+		true
+	);
+
 	const fakePool =
 		liveFakes && liveFakes.length >= 3 ? liveFakes : FALLBACK_FAKES.filter((p) => p.cat === cat.id);
-	const fks = shuffle(fakePool)
-		.slice(0, 5 - reals.length)
-		.map((p) => ({ ...p, isReal: false }));
+	let fks = take(fakePool, 5 - reals.length, false);
+	// Backfill from the house deck if the live fakes had dupes or name collisions.
+	if (reals.length + fks.length < 5) {
+		fks = fks.concat(
+			take(
+				FALLBACK_FAKES.filter((p) => p.cat === cat.id),
+				5 - reals.length - fks.length,
+				false
+			)
+		);
+	}
+
 	return shuffle([...reals, ...fks]).map(withCrowd);
 }
 
