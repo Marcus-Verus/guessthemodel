@@ -62,7 +62,23 @@ export const REAL_PRODUCTS: Product[] = [
 	{ cat: 'home', name: 'Ostrich Pillow', tagline: 'A wearable cocoon for napping face-down anywhere.', price: '$99.00', rating: 4.1, emoji: '😴', review: 'Slept at my desk. Woke up to HR. Worth it.', fact: 'Real — it raised over $190k on Kickstarter.', buy: amz('ostrich pillow nap') },
 	{ cat: 'home', name: 'Nicolas Cage Sequin Pillow', tagline: 'Swipe the sequins to reveal his face. Swipe again to hide it.', price: '$14.99', rating: 4.5, emoji: '✨', review: 'Guests are afraid of my couch now. Five stars.', fact: 'Real, and a perennial white-elephant champion.', buy: amz('nicolas cage sequin pillow') },
 	{ cat: 'home', name: 'Toilet Timer', tagline: 'A sand timer that ends bathroom hiding sessions in 5 minutes.', price: '$14.95', rating: 4.5, emoji: '⏳', review: 'Bought by my wife. Reviewed under duress.', fact: 'Real — a Shark Tank deal and a Father\'s Day bestseller.', buy: amz('toilet timer sand') },
-	{ cat: 'home', name: 'Emergency Underpants in a Can', tagline: 'One pair of unisex underpants, canned for your darkest hour.', price: '$9.95', rating: 4.4, emoji: '🥫', review: 'Hope for the best, can the rest.', fact: 'Real, also from Archie McPhee.', buy: amz('emergency underpants in a can') }
+	{ cat: 'home', name: 'Emergency Underpants in a Can', tagline: 'One pair of unisex underpants, canned for your darkest hour.', price: '$9.95', rating: 4.4, emoji: '🥫', review: 'Hope for the best, can the rest.', fact: 'Real, also from Archie McPhee.', buy: amz('emergency underpants in a can') },
+	// ---- More Kitchen Crimes ----
+	{ cat: 'kitchen', name: 'Egg Cuber', tagline: 'Press a hard-boiled egg into a perfect cube.', price: '$11.99', rating: 4.1, emoji: '🥚', review: 'Round eggs roll off the plate. Cubes know their place.', fact: 'Real — a retro gadget that genuinely makes square eggs.', buy: amz('egg cuber square egg mold') },
+	{ cat: 'kitchen', name: 'Corn Kernel Stripper', tagline: 'Zip a whole cob clean in one downward stroke.', price: '$8.49', rating: 4.4, emoji: '🌽', review: 'I have stripped every cob in the house. Send more corn.', fact: 'Real — the "corn zipper" is a county-fair legend.', buy: amz('corn kernel stripper zipper') },
+	{ cat: 'kitchen', name: 'Five-Blade Herb Scissors', tagline: 'Five parallel blades mince herbs in a single snip.', price: '$10.99', rating: 4.3, emoji: '🌿', review: 'My basil never saw it coming. Five times the menace.', fact: 'Real, and weirdly satisfying.', buy: amz('5 blade herb scissors') },
+	// ---- More Pet Nonsense ----
+	{ cat: 'pets', name: 'Bird Diaper FlightSuit', tagline: 'A wearable diaper so your parrot can roam the house.', price: '$24.95', rating: 4.0, emoji: '🦜', review: 'Polly is now house-trained and frankly stylish.', fact: 'Real — bird people swear by them.', buy: amz('bird diaper flight suit') },
+	{ cat: 'pets', name: 'Cat Exercise Wheel', tagline: 'A five-foot hamster wheel, scaled up for your cat.', price: '$199.99', rating: 4.2, emoji: '🐈', review: 'My cat ran a 5K at 3am. I have not slept since.', fact: 'Real — yes, cats actually use them.', buy: amz('cat exercise wheel') },
+	{ cat: 'pets', name: 'Dog Snuffle Mat', tagline: 'A shaggy mat that hides kibble for your dog to forage.', price: '$16.99', rating: 4.6, emoji: '🐶', review: 'Dinner now takes 20 minutes instead of 4 seconds.', fact: 'Real — vets actually recommend these.', buy: amz('dog snuffle mat') },
+	// ---- More Office Gags ----
+	{ cat: 'office', name: 'The Useless Box', tagline: 'Flip the switch and a tiny arm flips it right back off.', price: '$23.99', rating: 4.6, emoji: '🔘', review: 'It does nothing, beautifully. My new role model.', fact: 'Real — a classic "leave me alone" machine.', buy: amz('useless box leave me alone') },
+	{ cat: 'office', name: 'USB Humping Dog', tagline: 'A plastic terrier that enthusiastically rides your USB port.', price: '$9.99', rating: 4.3, emoji: '🐕', review: 'Plugged it in during a Zoom call. I no longer have that job.', fact: 'Real — a cubicle prank hall-of-famer.', buy: amz('usb humping dog') },
+	{ cat: 'office', name: 'Desktop Zen Garden', tagline: 'A tiny sand tray with a tiny rake for tiny peace.', price: '$13.99', rating: 4.2, emoji: '🏯', review: 'I rake the sand between meetings. The sand understands.', fact: 'Real — the desk-calm classic.', buy: amz('desktop zen garden mini rake') },
+	// ---- More Bed, Bath & Bizarre ----
+	{ cat: 'home', name: 'Squatty Potty', tagline: 'A footstool that puts your colon at the perfect angle.', price: '$24.99', rating: 4.7, emoji: '🚽', review: 'Life-changing. I tell strangers about it. They leave.', fact: 'Real — a Shark Tank smash with a unicorn ad.', buy: amz('squatty potty') },
+	{ cat: 'home', name: 'Motion Toilet Night Light', tagline: 'A bowl light that glows in 16 colors when you approach.', price: '$12.99', rating: 4.5, emoji: '🌈', review: '3am bathroom trips are now a tiny rave.', fact: 'Real — motion-activated and oddly delightful.', buy: amz('toilet night light motion') },
+	{ cat: 'home', name: 'Wearable Blanket Hoodie', tagline: 'A giant fleece sweatshirt-blanket you live inside.', price: '$39.99', rating: 4.6, emoji: '🧥', review: 'Put it on in October. See you in spring.', fact: 'Real — another Shark Tank cozy juggernaut.', buy: amz('wearable blanket hoodie oversized') }
 ];
 
 export const FALLBACK_FAKES: Product[] = [
@@ -81,7 +97,19 @@ export const FALLBACK_FAKES: Product[] = [
 	// home
 	{ cat: 'home', name: 'The Apology Doorbell', tagline: 'Rings, then immediately says sorry for disturbing you.', price: '$32.99', rating: 4.1, emoji: '🔔', review: 'Finally, a doorbell that understands social anxiety.', fact: 'AI-invented — though honestly, someone should make it.' },
 	{ cat: 'home', name: 'SnoreScore Pillow', tagline: 'Grades your snoring nightly and posts the report to your fridge.', price: '$79.99', rating: 3.7, emoji: '🛏️', review: "Got a B-. My wife disputes the grade. Says it's generous.", fact: 'AI-invented. Snore trackers exist — none of them grade.' },
-	{ cat: 'home', name: 'SockSync Clips', tagline: 'Bluetooth clips that beep when sock pairs drift apart.', price: '$24.99', rating: 3.8, emoji: '🧦', review: 'Found a sock from 2019. Emotional reunion.', fact: 'AI-invented — the lost-sock industrial complex survives.' }
+	{ cat: 'home', name: 'SockSync Clips', tagline: 'Bluetooth clips that beep when sock pairs drift apart.', price: '$24.99', rating: 3.8, emoji: '🧦', review: 'Found a sock from 2019. Emotional reunion.', fact: 'AI-invented — the lost-sock industrial complex survives.' },
+	// kitchen
+	{ cat: 'kitchen', name: 'SteamWhistle Colander', tagline: 'A pasta strainer that whistles like a kettle when fully drained.', price: '$26.99', rating: 4.1, emoji: '♨️', review: 'It toots when the pasta is ready. My family comes running.', fact: 'AI-invented. Colanders are silent by trade.' },
+	{ cat: 'kitchen', name: 'FridgeGossip Magnet', tagline: 'A magnet that narrates your snacking in a disappointed accent.', price: '$18.99', rating: 3.9, emoji: '🧲', review: '"Third cheese stick, is it." I have never felt so seen.', fact: 'AI-invented. Your fridge keeps your secrets, for now.' },
+	// pets
+	{ cat: 'pets', name: 'ParrotPrompter', tagline: 'A tiny teleprompter that feeds your parrot trending phrases.', price: '$42.00', rating: 4.0, emoji: '🦜', review: 'My parrot now does a morning news segment. Ratings are up.', fact: 'AI-invented. Parrots write their own material.' },
+	{ cat: 'pets', name: 'GoldfishGym Ramp', tagline: 'A miniature treadmill ramp for a more athletic goldfish.', price: '$31.50', rating: 3.8, emoji: '🐠', review: 'Gill is in the best shape of his nine-second life.', fact: 'AI-invented. Goldfish remain proudly un-gym.' },
+	// office
+	{ cat: 'office', name: 'DeadlineFog Machine', tagline: 'A desktop fogger that simulates the mist of looming urgency.', price: '$37.99', rating: 4.2, emoji: '🌫️', review: 'The fog rolled in at 4:58pm. The report wrote itself.', fact: 'AI-invented. Your dread is generated locally.' },
+	{ cat: 'office', name: 'ReplyAllRoulette', tagline: 'A button that recalls one random sent email per day.', price: '$22.49', rating: 3.9, emoji: '🎰', review: 'It un-sent my resignation. The wheel is kind sometimes.', fact: 'AI-invented. Sent is still forever.' },
+	// home
+	{ cat: 'home', name: 'DreamSubtitles Sleep Mask', tagline: 'Displays live subtitles of your dreams on the inside.', price: '$59.99', rating: 4.1, emoji: '😴', review: 'Last night was [INAUDIBLE] then a horse. Riveting.', fact: 'AI-invented. Dreams remain un-captioned.' },
+	{ cat: 'home', name: 'ThermostatTherapist', tagline: 'A thermostat that asks how the temperature makes you feel.', price: '$84.99', rating: 4.0, emoji: '🌡️', review: '"And how does 68 degrees sit with you?" We talked for an hour.', fact: 'AI-invented. Your thermostat is not licensed.' }
 ];
 
 export function shuffle<T>(arr: T[]): T[] {
