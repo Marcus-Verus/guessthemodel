@@ -6,7 +6,7 @@
 
 // Drop your Amazon Associates tag here (e.g. "duped-20") and every
 // buy link becomes an affiliate link automatically.
-export const AFFILIATE_TAG = '';
+export const AFFILIATE_TAG = 'duped05-20';
 
 export const amz = (q: string): string =>
 	`https://www.amazon.com/s?k=${encodeURIComponent(q)}` +
