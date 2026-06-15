@@ -5,6 +5,7 @@
 		REAL_PRODUCTS,
 		buildDailyRounds,
 		buildEndlessDeck,
+		dailyNumber,
 		todaysCategory,
 		tomorrowsCategory,
 		type Product
@@ -179,21 +180,16 @@
 
 	function shareText(): string {
 		if (mode === 'endless') {
-			return [
-				'DUPED ∞ — real-or-AI survival 🤖',
-				`I survived ${run} in a row (best ${bestRun}).`,
-				'Think you can outlast it?',
-				'Play free → duped.gg'
-			].join('\n');
+			return [`DUPED ∞`, `${run} in a row (best ${bestRun}) 🤖`, 'Play free → duped.gg'].join(
+				'\n'
+			);
 		}
 		const grid = guesses.map((g) => (g.correct ? '🟩' : '🟥')).join('');
 		const fooled = guesses.find((g) => !g.correct);
 		const fire = streak > 0 ? ` 🔥${streak}` : '';
-		const tail = fooled
-			? `Duped by “${fooled.name}” 😅 Your turn.`
-			: 'Un-dupable 😎 Bet you can’t.';
+		const tail = fooled ? `Duped by “${fooled.name}” 😅` : 'Un-dupable 😎';
 		return [
-			`DUPED ${cat.emoji} ${cat.label}`,
+			`DUPED #${dailyNumber()}`,
 			`${grid}  ${score}/5${fire}`,
 			tail,
 			'Play free → duped.gg'

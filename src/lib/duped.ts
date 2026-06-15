@@ -146,6 +146,13 @@ export function tomorrowsCategory(): Category {
 	return CATEGORIES[(day + 1) % CATEGORIES.length];
 }
 
+// Wordle-style daily puzzle number. 2026-06-15 (launch) = #1.
+export function dailyNumber(): number {
+	const LAUNCH = Math.floor(Date.UTC(2026, 5, 15) / 86400000);
+	const day = Math.floor(Date.now() / 86400000);
+	return day - LAUNCH + 1;
+}
+
 function withCrowd(p: Product): Product {
 	return { ...p, crowd: 18 + Math.floor(Math.random() * 64) };
 }
