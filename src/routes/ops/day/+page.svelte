@@ -43,7 +43,7 @@
 			if (res.ok) {
 				const d = await res.json();
 				if (d.ok) await invalidateAll();
-				else msg = 'No change (image gen on? URL valid?).';
+				else msg = d.error || 'No change (image gen on? URL valid?).';
 			} else msg = `Failed (HTTP ${res.status}).`;
 		} catch (err) {
 			msg = `Failed (${err instanceof Error ? err.message : 'network'}).`;

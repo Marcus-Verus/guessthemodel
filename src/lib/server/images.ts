@@ -2,25 +2,30 @@ import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/supabase';
 
 const BUCKET = 'puzzle-images';
+// Grok image model by default; override with OPENROUTER_IMAGE_MODEL.
+const DEFAULT_IMAGE_MODEL = 'x-ai/grok-imagine-image-quality';
 
-/**
- * Image generation is OFF unless an image model is configured (and Supabase is
- * available to host the result). This keeps the game on emoji until you opt in.
- */
+/** On whenever OpenRouter + Supabase are available (Grok is the default model). */
 export function imagesEnabled(): boolean {
-	return !!(env.OPENROUTER_API_KEY && env.OPENROUTER_IMAGE_MODEL && db());
+	return !!(env.OPENROUTER_API_KEY && db());
+}
+
+export interface ImageResult {
+	url?: string;
+	error?: string;
 }
 
 /**
  * Generate a clean white-background product photo via OpenRouter's image model
- * (same key as the text fakes), upload it to Supabase Storage, and return the
- * public URL. Returns null on any failure so the caller falls back to emoji.
+ * (same key as the text fakes), upload to Supabase Storage, return the public
+ * URL. Returns { error } on failure so the admin can see why.
  */
-export async function generateProductImage(name: string, tagline: string): Promise<string | null> {
+export async function generateProductImage(name: string, tagline: string): Promise<ImageResult> {
 	const key = env.OPENROUTER_API_KEY;
-	const model = env.OPENROUTER_IMAGE_MODEL;
+	const model = env.OPENROUTER_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
 	const c = db();
-	if (!key || !model || !c) return null;
+	if (!key) return { error: 'OPENROUTER_API_KEY not set' };
+	if (!c) return { error: 'Supabase not configured' };
 
 	const prompt =
 		`Studio product photo of "${name}": ${tagline}. ` +
@@ -39,36 +44,48 @@ export async function generateProductImage(name: string, tagline: string): Promi
 			body: JSON.stringify({
 				model,
 				messages: [{ role: 'user', content: prompt }],
-				modalities: ['image', 'text']
+				modalities: ['image']
 			})
 		});
-		if (!res.ok) return null;
+		if (!res.ok) {
+			return { error: `OpenRouter ${res.status}: ${(await res.text()).slice(0, 300)}` };
+		}
 
 		const data = await res.json();
 		const msg = data.choices?.[0]?.message;
-		// OpenRouter returns generated images on message.images[].image_url.url
-		// (a data: URL). Fall back to scanning content parts just in case.
 		let dataUrl: string | undefined = msg?.images?.[0]?.image_url?.url;
 		if (!dataUrl && Array.isArray(msg?.content)) {
 			const part = msg.content.find(
-				(p: { type?: string; image_url?: { url?: string } }) => p?.image_url?.url
+				(p: { image_url?: { url?: string } }) => p?.image_url?.url
 			);
 			dataUrl = part?.image_url?.url;
 		}
-		if (!dataUrl || !dataUrl.startsWith('data:')) return null;
+		if (!dataUrl) return { error: `No image in response: ${JSON.stringify(data).slice(0, 300)}` };
 
-		const comma = dataUrl.indexOf(',');
-		const meta = dataUrl.slice(5, comma); // e.g. "image/png;base64"
-		const contentType = meta.split(';')[0] || 'image/png';
+		// Could be a data: URL (base64) or a hosted https URL.
+		let bytes: Buffer;
+		let contentType = 'image/png';
+		if (dataUrl.startsWith('data:')) {
+			const comma = dataUrl.indexOf(',');
+			contentType = dataUrl.slice(5, comma).split(';')[0] || 'image/png';
+			bytes = Buffer.from(dataUrl.slice(comma + 1), 'base64');
+		} else if (dataUrl.startsWith('http')) {
+			const imgRes = await fetch(dataUrl);
+			if (!imgRes.ok) return { error: `Fetch image failed: ${imgRes.status}` };
+			contentType = imgRes.headers.get('content-type') || 'image/png';
+			bytes = Buffer.from(await imgRes.arrayBuffer());
+		} else {
+			return { error: 'Unrecognized image URL format' };
+		}
+
 		const ext = (contentType.split('/')[1] || 'png').replace('jpeg', 'jpg');
-		const bytes = Buffer.from(dataUrl.slice(comma + 1), 'base64');
-
 		const path = `fakes/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 		const up = await c.storage.from(BUCKET).upload(path, bytes, { contentType, upsert: true });
-		if (up.error) return null;
+		if (up.error) return { error: `Storage upload failed: ${up.error.message}` };
 
-		return c.storage.from(BUCKET).getPublicUrl(path).data.publicUrl ?? null;
-	} catch {
-		return null;
+		const publicUrl = c.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+		return publicUrl ? { url: publicUrl } : { error: 'No public URL (is the bucket public?)' };
+	} catch (e) {
+		return { error: e instanceof Error ? e.message : 'unknown error' };
 	}
 }
