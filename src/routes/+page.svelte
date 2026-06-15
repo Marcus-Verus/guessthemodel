@@ -229,9 +229,9 @@
 	}
 
 	// SERP-tuned: title ~51 chars (<580px), description ~150 chars (<920px).
-	const title = 'DUPED — Real Amazon Finds vs. AI Fakes | Daily Game';
+	const title = 'DUPED - Real Amazon Finds vs. AI Fakes | Daily Game';
 	const description =
-		'Real Amazon products or AI fakes? Some are genuinely for sale, some an AI just invented. Play the daily 5 and endless survival — don’t get duped.';
+		'Real Amazon products or AI fakes? Some are genuinely for sale, some an AI just invented. Play the daily 5 and endless survival - don’t get duped.';
 
 	// Structured data for Google/Bing. Split the closing tag so the .svelte
 	// parser doesn't end the component script early.
@@ -265,7 +265,7 @@
 	<meta property="og:image" content={OG_IMAGE} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="DUPED — real Amazon products vs. AI fakes" />
+	<meta property="og:image:alt" content="DUPED - real Amazon products vs. AI fakes" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />

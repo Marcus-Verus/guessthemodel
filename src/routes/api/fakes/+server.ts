@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { generateFakes } from '$lib/server/anthropic';
+import { generateFakes } from '$lib/server/fakes';
 
 /**
  * Generate a fresh batch of AI fakes for a category, server-side, so the
