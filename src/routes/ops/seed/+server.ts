@@ -12,9 +12,10 @@ export const POST: RequestHandler = async ({ url, cookies }) => {
 	const days = Math.min(60, Math.max(1, Number(url.searchParams.get('days')) || 7));
 	const today = Math.floor(Date.now() / 86400000);
 
-	const seeded: { day: number; created: boolean }[] = [];
-	for (let i = 1; i <= days; i++) {
-		seeded.push(await ensureDay(today + i));
-	}
+	// Generate in parallel so we don't blow the function timeout on N sequential
+	// LLM calls.
+	const seeded = await Promise.all(
+		Array.from({ length: days }, (_, i) => ensureDay(today + i + 1))
+	);
 	return json({ created: seeded.filter((s) => s.created).length, days, seeded });
 };

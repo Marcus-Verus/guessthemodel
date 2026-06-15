@@ -14,10 +14,14 @@
 		seedMsg = '';
 		try {
 			const res = await fetch('/ops/seed?days=7', { method: 'POST' });
-			const d = await res.json();
-			seedMsg = `Pre-seeded ${d.created} new day(s) of the next ${d.days}.`;
-		} catch {
-			seedMsg = 'Pre-seed failed.';
+			if (!res.ok) {
+				seedMsg = `Pre-seed failed (HTTP ${res.status}).`;
+			} else {
+				const d = await res.json();
+				seedMsg = `Pre-seeded ${d.created} new day(s) of the next ${d.days}.`;
+			}
+		} catch (err) {
+			seedMsg = `Pre-seed failed (${err instanceof Error ? err.message : 'network'}).`;
 		}
 		seeding = false;
 	}

@@ -419,6 +419,35 @@
 	{/if}
 {/snippet}
 
+{#snippet emailCapture()}
+	{#if subscribed}
+		<p class="subnote">Thanks — see you tomorrow. 👋</p>
+	{:else}
+		<form class="emailform" onsubmit={submitEmail}>
+			<input
+				type="email"
+				bind:value={email}
+				placeholder="you@email.com"
+				aria-label="Email"
+				required
+			/>
+			<input
+				type="text"
+				tabindex="-1"
+				autocomplete="off"
+				aria-hidden="true"
+				bind:value={botField}
+				name="bot"
+				style="display:none"
+			/>
+			<button type="submit" disabled={subscribing}>
+				{subscribing ? '…' : 'NOTIFY ME'}
+			</button>
+		</form>
+		<p class="subnote">Get tomorrow's category — a daily nudge, no spam.</p>
+	{/if}
+{/snippet}
+
 <div class="gtm-root">
 	{#if phase !== 'title'}
 		<header class="topbar">
@@ -474,35 +503,7 @@
 				TODAY'S CATEGORY: {cat.emoji} {cat.label.toUpperCase()}
 			</div>
 			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
-			<button class="endlessbtn" onclick={startEndless}>∞ ENDLESS — 3 STRIKES AND OUT</button>
 			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
-
-			{#if subscribed}
-				<p class="subnote">Thanks — see you tomorrow. 👋</p>
-			{:else}
-				<form class="emailform" onsubmit={submitEmail}>
-					<input
-						type="email"
-						bind:value={email}
-						placeholder="you@email.com"
-						aria-label="Email"
-						required
-					/>
-					<input
-						type="text"
-						tabindex="-1"
-						autocomplete="off"
-						aria-hidden="true"
-						bind:value={botField}
-						name="bot"
-						style="display:none"
-					/>
-					<button type="submit" disabled={subscribing}>
-						{subscribing ? '…' : 'NOTIFY ME'}
-					</button>
-				</form>
-				<p class="subnote">New category daily — get a nudge. No spam.</p>
-			{/if}
 
 			{#if saved.length > 0}
 				<div class="savedwrap">
@@ -645,6 +646,7 @@
 			<div class="tmrw">
 				TOMORROW: {tomorrow.emoji} {tomorrow.label.toUpperCase()}
 			</div>
+			{@render emailCapture()}
 		</div>
 	{/if}
 
@@ -663,6 +665,7 @@
 			</button>
 			<button class="againbtn" onclick={startEndless}>∞ RUN IT BACK</button>
 			<button class="againbtn" onclick={startDaily}>BACK TO TODAY'S 5</button>
+			{@render emailCapture()}
 		</div>
 	{/if}
 </div>
