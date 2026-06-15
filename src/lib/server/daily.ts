@@ -18,8 +18,8 @@ function withCrowd(p: Product): Product {
 /** Generate a product photo for a fake card (reals carry their catalog img). */
 async function withImage(item: Product): Promise<Product> {
 	if (item.img || item.isReal || !imagesEnabled()) return item;
-	const img = await generateProductImage(item.name, item.tagline);
-	return img ? { ...item, img } : item;
+	const r = await generateProductImage(item.name, item.tagline);
+	return r.url ? { ...item, img: r.url } : item;
 }
 
 /** Apply admin-set image overrides (by product name) to a list of items. */
@@ -195,14 +195,14 @@ export async function setItemImage(
 export async function regenItemImage(
 	day: number,
 	index: number
-): Promise<{ ok: boolean; items?: Product[] }> {
+): Promise<{ ok: boolean; items?: Product[]; error?: string }> {
 	const s = await loadStored(day);
-	if (!s) return { ok: false };
-	if (index < 0 || index >= s.items.length) return { ok: false };
+	if (!s) return { ok: false, error: 'Day not found / Supabase not configured' };
+	if (index < 0 || index >= s.items.length) return { ok: false, error: 'Bad index' };
 	const target = s.items[index];
-	const img = await generateProductImage(target.name, target.tagline);
-	if (!img) return { ok: false, items: s.items };
-	const items = s.items.map((it, i) => (i === index ? { ...it, img } : it));
+	const r = await generateProductImage(target.name, target.tagline);
+	if (!r.url) return { ok: false, items: s.items, error: r.error };
+	const items = s.items.map((it, i) => (i === index ? { ...it, img: r.url } : it));
 	await s.c.from('daily_puzzles').upsert({ day, category: s.category, items, live: s.live }, { onConflict: 'day' });
 	return { ok: true, items };
 }
