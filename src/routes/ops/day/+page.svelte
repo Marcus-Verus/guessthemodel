@@ -93,7 +93,11 @@
 				>
 					{itemBusy === i ? '…' : '↻'}
 				</button>
-				<div class="emoji">{it.emoji || '📦'}</div>
+				{#if it.img}
+					<img class="thumb" src={it.img} alt="" />
+				{:else}
+					<div class="emoji">{it.emoji || '📦'}</div>
+				{/if}
 				<div class="body">
 					<div class="row">
 						<span class="name">{it.name}</span>
@@ -260,6 +264,15 @@
 	.emoji {
 		font-size: 42px;
 		text-align: center;
+		margin: 4px 0 8px;
+	}
+	.thumb {
+		display: block;
+		width: 100%;
+		height: 130px;
+		object-fit: contain;
+		background: #fff;
+		border-radius: 8px;
 		margin: 4px 0 8px;
 	}
 	.row {

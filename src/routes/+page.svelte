@@ -74,6 +74,10 @@
 		}
 	});
 
+	// All-or-nothing: only show photos when every card in the deck has one, so a
+	// player never sees a "some photos, some emoji" tell.
+	const showPhotos = $derived(rounds.length > 0 && rounds.every((r) => !!r.img));
+
 	const score = $derived(guesses.filter((g) => g.correct).length);
 	const p = $derived<Product | undefined>(rounds[idx]);
 	const lastGuess = $derived<Guess | undefined>(guesses[guesses.length - 1]);
@@ -538,7 +542,7 @@
 					? `Streak ${run} · ${catLabelFor(p.cat)}`
 					: `DUPED #${data.daily.number} · Round ${idx + 1} of 5`}
 			</div>
-			{@render productPhoto(p.emoji, p.img, false)}
+			{@render productPhoto(p.emoji, showPhotos ? p.img : undefined, false)}
 			<h2 class="disp pname">{p.name}</h2>
 			<p class="ptag">{p.tagline}</p>
 			{@render stars(p.rating)}
@@ -560,7 +564,7 @@
 	{#if phase === 'play' && p && revealed && lastGuess}
 		<div class="reveal-card pop">
 			{@render starburst(lastGuess.correct, !!p.isReal, revealLabel(lastGuess.correct, guesses.length - 1))}
-			{@render productPhoto(p.emoji, p.img, true)}
+			{@render productPhoto(p.emoji, showPhotos ? p.img : undefined, true)}
 			<h2 class="disp pname" style="margin:6px 0 4px;font-size:20px">{p.name}</h2>
 			<p class="fact">{p.fact}</p>
 			<div class="crowd">
