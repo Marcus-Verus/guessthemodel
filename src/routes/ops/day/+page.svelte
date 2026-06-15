@@ -53,6 +53,7 @@
 
 	const regenItem = (i: number) => post('/ops/regen-item', i);
 	const genImage = (i: number) => post('/ops/gen-image', i);
+	const clearImage = (i: number) => post('/ops/clear-image', i);
 	function setImage(i: number) {
 		const u = (urlInput[i] || '').trim();
 		if (!u) return;
@@ -137,6 +138,11 @@
 						{:else}
 							<button class="imbtn" onclick={() => genImage(i)} disabled={itemBusy >= 0 || busy}>
 								{itemBusy === i ? '…' : it.img ? 'Regen photo' : 'Gen photo'}
+							</button>
+						{/if}
+						{#if it.img}
+							<button class="imbtn del" onclick={() => clearImage(i)} disabled={itemBusy >= 0 || busy} title="Remove photo">
+								✕
 							</button>
 						{/if}
 					</div>
@@ -385,5 +391,9 @@
 	}
 	.imbtn:disabled {
 		opacity: 0.6;
+	}
+	.imbtn.del {
+		background: #7a1d1d;
+		padding: 6px 9px;
 	}
 </style>
