@@ -22,7 +22,9 @@ export interface ImageResult {
  */
 export async function generateProductImage(name: string, tagline: string): Promise<ImageResult> {
 	const key = env.OPENROUTER_API_KEY;
-	const model = env.OPENROUTER_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
+	// Guard against the common mistake of pasting the API key into the model var.
+	const configured = env.OPENROUTER_IMAGE_MODEL;
+	const model = configured && !configured.startsWith('sk-') ? configured : DEFAULT_IMAGE_MODEL;
 	const c = db();
 	if (!key) return { error: 'OPENROUTER_API_KEY not set' };
 	if (!c) return { error: 'Supabase not configured' };
