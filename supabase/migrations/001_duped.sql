@@ -35,6 +35,14 @@ create table if not exists daily_puzzles (
 	created_at timestamptz not null default now()
 );
 
+-- 5) Per-product image overrides (e.g. SiteStripe photos for real products),
+--    applied by name whenever a puzzle is built so a real's photo sticks.
+create table if not exists product_images (
+	name text primary key,
+	img text not null,
+	updated_at timestamptz not null default now()
+);
+
 create index if not exists events_type_created_idx on events (type, created_at desc);
 create index if not exists signups_created_idx on signups (created_at desc);
 
@@ -43,3 +51,4 @@ create index if not exists signups_created_idx on signups (created_at desc);
 alter table signups enable row level security;
 alter table events enable row level security;
 alter table daily_puzzles enable row level security;
+alter table product_images enable row level security;

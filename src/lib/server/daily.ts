@@ -22,6 +22,19 @@ async function withImage(item: Product): Promise<Product> {
 	return img ? { ...item, img } : item;
 }
 
+/** Apply admin-set image overrides (by product name) to a list of items. */
+async function applyImageOverrides(items: Product[]): Promise<Product[]> {
+	const c = db();
+	if (!c) return items;
+	const { data } = await c
+		.from('product_images')
+		.select('name, img')
+		.in('name', items.map((i) => i.name));
+	if (!data || !data.length) return items;
+	const map = new Map(data.map((r) => [r.name as string, r.img as string]));
+	return items.map((it) => (map.has(it.name) ? { ...it, img: map.get(it.name)! } : it));
+}
+
 export interface DailyPuzzle {
 	day: number;
 	category: Category;
@@ -39,6 +52,8 @@ async function buildAndStore(day: number, category: Category): Promise<DailyPuzz
 	let items = buildDailyRounds(category, fakes);
 	const live = !!fakes;
 
+	// Real-product photo overrides set in the admin (by name).
+	items = await applyImageOverrides(items);
 	// Generate photos for the fake cards (no-op unless image gen is enabled).
 	if (imagesEnabled()) {
 		items = await Promise.all(items.map(withImage));
@@ -142,6 +157,53 @@ export async function regenerateItem(
 	const final = await withImage(withCrowd(replacement)); // photo for new fakes (no-op if disabled)
 	items = items.map((it, i) => (i === index ? final : it));
 	await c.from('daily_puzzles').upsert({ day, category: category.id, items, live }, { onConflict: 'day' });
+	return { ok: true, items };
+}
+
+/** Load a stored day's items (admin helpers). */
+async function loadStored(day: number) {
+	const c = db();
+	if (!c) return null;
+	const row = await c
+		.from('daily_puzzles')
+		.select('items, live, category')
+		.eq('day', day)
+		.maybeSingle();
+	if (!row.data) return null;
+	return { c, items: row.data.items as Product[], live: !!row.data.live, category: row.data.category as string };
+}
+
+/** Set a card's image to a pasted URL. For reals, also save it as a catalog
+ * override so the photo sticks on every future day that product appears. */
+export async function setItemImage(
+	day: number,
+	index: number,
+	url: string
+): Promise<{ ok: boolean; items?: Product[] }> {
+	const s = await loadStored(day);
+	if (!s) return { ok: false };
+	if (index < 0 || index >= s.items.length) return { ok: false };
+	const items = s.items.map((it, i) => (i === index ? { ...it, img: url } : it));
+	await s.c.from('daily_puzzles').upsert({ day, category: s.category, items, live: s.live }, { onConflict: 'day' });
+	if (s.items[index].isReal) {
+		await s.c.from('product_images').upsert({ name: s.items[index].name, img: url }, { onConflict: 'name' });
+	}
+	return { ok: true, items };
+}
+
+/** (Re)generate just the image for one card, keeping the product itself. */
+export async function regenItemImage(
+	day: number,
+	index: number
+): Promise<{ ok: boolean; items?: Product[] }> {
+	const s = await loadStored(day);
+	if (!s) return { ok: false };
+	if (index < 0 || index >= s.items.length) return { ok: false };
+	const target = s.items[index];
+	const img = await generateProductImage(target.name, target.tagline);
+	if (!img) return { ok: false, items: s.items };
+	const items = s.items.map((it, i) => (i === index ? { ...it, img } : it));
+	await s.c.from('daily_puzzles').upsert({ day, category: s.category, items, live: s.live }, { onConflict: 'day' });
 	return { ok: true, items };
 }
 
