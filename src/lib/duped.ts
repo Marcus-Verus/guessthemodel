@@ -109,7 +109,22 @@ export const FALLBACK_FAKES: Product[] = [
 	{ cat: 'office', name: 'ReplyAllRoulette', tagline: 'A button that recalls one random sent email per day.', price: '$22.49', rating: 3.9, emoji: '🎰', review: 'It un-sent my resignation. The wheel is kind sometimes.', fact: 'AI-invented. Sent is still forever.' },
 	// home
 	{ cat: 'home', name: 'DreamSubtitles Sleep Mask', tagline: 'Displays live subtitles of your dreams on the inside.', price: '$59.99', rating: 4.1, emoji: '😴', review: 'Last night was [INAUDIBLE] then a horse. Riveting.', fact: 'AI-invented. Dreams remain un-captioned.' },
-	{ cat: 'home', name: 'ThermostatTherapist', tagline: 'A thermostat that asks how the temperature makes you feel.', price: '$84.99', rating: 4.0, emoji: '🌡️', review: '"And how does 68 degrees sit with you?" We talked for an hour.', fact: 'AI-invented. Your thermostat is not licensed.' }
+	{ cat: 'home', name: 'ThermostatTherapist', tagline: 'A thermostat that asks how the temperature makes you feel.', price: '$84.99', rating: 4.0, emoji: '🌡️', review: '"And how does 68 degrees sit with you?" We talked for an hour.', fact: 'AI-invented. Your thermostat is not licensed.' },
+	// ---- More fakes (endless-deck balance) ----
+	// kitchen
+	{ cat: 'kitchen', name: 'MoodRing Spatula', tagline: 'The handle changes color based on how stressed your stirring is.', price: '$19.99', rating: 4.0, emoji: '🥄', review: 'It went red during gravy. The spatula knew.', fact: 'AI-invented. Your spatula has no feelings, probably.' },
+	{ cat: 'kitchen', name: 'Self-Salting Shaker', tagline: 'A shaker that decides how much salt you actually need.', price: '$29.99', rating: 3.9, emoji: '🧂', review: 'It denied me salt on Tuesday. We are not speaking.', fact: 'AI-invented. Seasoning remains a personal choice.' },
+	{ cat: 'kitchen', name: 'Toast Karaoke', tagline: 'A toaster that hums backing tracks while your bread browns.', price: '$48.99', rating: 4.2, emoji: '🎤', review: 'Breakfast is now a duet. The neighbors have notes.', fact: 'AI-invented. Toasters cannot carry a tune.' },
+	// pets
+	{ cat: 'pets', name: 'TreatGPS Collar', tagline: 'A collar that claims to navigate your dog to dropped snacks.', price: '$54.99', rating: 4.1, emoji: '📡', review: 'Rerouted to the kitchen floor. Arrived in 4 seconds.', fact: 'AI-invented. Dogs already have this. It is called a nose.' },
+	{ cat: 'pets', name: 'Aquarium Doorbell', tagline: 'A tank-mounted button your fish can ring for attention.', price: '$27.99', rating: 3.8, emoji: '🐟', review: 'It has rung 400 times. I think it is just bubbles.', fact: 'AI-invented. Fish have no appointments.' },
+	// office
+	{ cat: 'office', name: 'Self-Banging Gavel', tagline: 'A desk gavel that bangs itself when a meeting runs long.', price: '$33.99', rating: 4.3, emoji: '🔨', review: 'It silenced Greg at minute nine. We held a small parade.', fact: 'AI-invented. Meetings remain immortal.' },
+	{ cat: 'office', name: 'Inbox Snow Globe', tagline: 'Shake it for the calming illusion of a cleared inbox.', price: '$16.99', rating: 4.0, emoji: '❄️', review: 'I shook it instead of replying. Productivity unchanged, mood up.', fact: 'AI-invented. Your unread count is real.' },
+	// home
+	{ cat: 'home', name: 'WhisperBlinds', tagline: 'Window blinds that softly narrate the weather as they open.', price: '$74.99', rating: 4.1, emoji: '🪟', review: '"Partly cloudy, like your plans." Rude, but accurate.', fact: 'AI-invented. Blinds remain non-verbal.' },
+	{ cat: 'home', name: 'PillowPolygraph', tagline: 'A pillow that detects whether you really slept well or are lying.', price: '$62.99', rating: 3.9, emoji: '🛌', review: 'It called my "8 hours" a fabrication. We both know it is right.', fact: 'AI-invented. Your sleep debt stays off the record.' },
+	{ cat: 'home', name: 'Couch Curfew Cushion', tagline: 'A cushion that gently nags you toward bed after midnight.', price: '$39.99', rating: 4.2, emoji: '🛋️', review: 'It buzzed at 1am. I ignored it. It buzzed harder.', fact: 'AI-invented. The couch is not your parent.' }
 ];
 
 export function shuffle<T>(arr: T[]): T[] {
