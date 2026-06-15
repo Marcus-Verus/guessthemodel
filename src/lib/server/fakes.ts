@@ -8,12 +8,17 @@ const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const OPENROUTER_MODEL_DEFAULT = 'anthropic/claude-sonnet-4.5';
 
 export function fakesPrompt(catLabel: string): string {
-	return `Invent 3 fictional novelty products in the category "${catLabel}". The humor is deadpan and understated: each one should sound like it could plausibly be a real gag gift sold on Amazon, but is slightly, absurdly impossible. Think "almost real, but no." Family-friendly. No puns in the names.
+	return `Invent 3 fictional products in the category "${catLabel}" for a "real or fake?" guessing game. They must be HARD to tell apart from real Amazon novelty products.
+
+Rules for believability:
+- Use plain, realistic product names like a real brand would use. NO puns, NO portmanteaus, NO jokey or cutesy names (avoid things like "GravyAlarm" or "ThermostatTherapist").
+- The product should sound like it could genuinely be for sale. The absurdity should be subtle - something a real company *might* actually have made, that only feels off on a second thought. Aim for "wait, is that real?", not "obviously fake".
+- Keep the customer review dry and matter-of-fact, like a real reviewer. No winking at the camera.
 
 Respond ONLY with a JSON array, no markdown fences, no other text. Each item:
-{"name": "...", "tagline": "one sentence pitch, said with a straight face", "price": "$XX.XX", "rating": 3.8, "emoji": "a single emoji that represents the product", "review": "one short, dry, funny customer review", "fact": "one short line starting with 'AI-invented.' that playfully confirms it is fake"}
+{"name": "...", "tagline": "one plain sentence describing what it does", "price": "$XX.XX", "rating": 3.8, "emoji": "a single representative emoji", "review": "one short, believable customer review", "fact": "one short line starting with 'AI-invented.' that confirms it is fake"}
 
-Keep names under 4 words and believable (like a real brand would name it). Ratings between 3.7 and 4.8.`;
+Names under 4 words. Ratings between 3.7 and 4.8.`;
 }
 
 /** Generate via OpenRouter (OpenAI-compatible). Returns raw text or null. */
