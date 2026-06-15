@@ -136,14 +136,16 @@ export function shuffle<T>(arr: T[]): T[] {
 	return a;
 }
 
+export function categoryForDay(day: number): Category {
+	return CATEGORIES[((day % CATEGORIES.length) + CATEGORIES.length) % CATEGORIES.length];
+}
+
 export function todaysCategory(): Category {
-	const day = Math.floor(Date.now() / 86400000);
-	return CATEGORIES[day % CATEGORIES.length];
+	return categoryForDay(Math.floor(Date.now() / 86400000));
 }
 
 export function tomorrowsCategory(): Category {
-	const day = Math.floor(Date.now() / 86400000);
-	return CATEGORIES[(day + 1) % CATEGORIES.length];
+	return categoryForDay(Math.floor(Date.now() / 86400000) + 1);
 }
 
 // Wordle-style daily puzzle number. 2026-06-15 (launch) = #1.

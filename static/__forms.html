@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+	<head><meta charset="utf-8" /><title>forms</title></head>
+	<body>
+		<!--
+			Static form so Netlify detects "signup" at deploy time (the live app is
+			SSR-rendered, which Netlify's form parser can't see). The real form in
+			the app submits to this via fetch.
+		-->
+		<form name="signup" netlify netlify-honeypot="bot-field" hidden>
+			<input type="email" name="email" />
+			<input type="text" name="bot-field" />
+		</form>
+	</body>
+</html>

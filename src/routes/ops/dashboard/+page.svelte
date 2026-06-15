@@ -5,6 +5,22 @@
 	function fmt(ts: string) {
 		return new Date(ts).toLocaleString();
 	}
+
+	let seeding = $state(false);
+	let seedMsg = $state('');
+	async function preseed() {
+		if (seeding) return;
+		seeding = true;
+		seedMsg = '';
+		try {
+			const res = await fetch('/ops/seed?days=7', { method: 'POST' });
+			const d = await res.json();
+			seedMsg = `Pre-seeded ${d.created} new day(s) of the next ${d.days}.`;
+		} catch {
+			seedMsg = 'Pre-seed failed.';
+		}
+		seeding = false;
+	}
 </script>
 
 <svelte:head>
@@ -23,12 +39,20 @@
 	{:else}
 		<div class="cards">
 			<div class="kpi"><b>{data.signups}</b><span>EMAIL SIGNUPS</span></div>
+			<div class="kpi"><b>{data.starts}</b><span>GAME STARTS</span></div>
 			<div class="kpi"><b>{data.games}</b><span>GAMES COMPLETED</span></div>
 			<div class="kpi"><b>{data.gamesToday}</b><span>GAMES (24H)</span></div>
 			<div class="kpi"><b>{data.endless}</b><span>ENDLESS RUNS</span></div>
 			<div class="kpi"><b>{data.clicks}</b><span>AMAZON CLICKS</span></div>
 			<div class="kpi"><b>{data.shares}</b><span>SHARES</span></div>
+			<div class="kpi"><b>{data.saves}</b><span>SAVED FINDS</span></div>
 		</div>
+
+		<h2>Daily puzzles</h2>
+		<button class="action" onclick={preseed} disabled={seeding}>
+			{seeding ? 'Pre-seeding…' : 'Pre-seed next 7 days'}
+		</button>
+		{#if seedMsg}<span class="seedmsg">{seedMsg}</span>{/if}
 
 		<h2>Recent signups</h2>
 		{#if data.recent.length === 0}
@@ -107,6 +131,25 @@
 	}
 	.muted {
 		color: #8a8f9b;
+	}
+	.action {
+		border: none;
+		background: #1230bf;
+		color: #fff;
+		border-radius: 10px;
+		padding: 10px 16px;
+		font-weight: 700;
+		font-size: 13px;
+		cursor: pointer;
+	}
+	.action:disabled {
+		opacity: 0.6;
+	}
+	.seedmsg {
+		margin-left: 10px;
+		font-size: 13px;
+		color: #00a878;
+		font-weight: 600;
 	}
 	.warn {
 		background: #fff6d6;

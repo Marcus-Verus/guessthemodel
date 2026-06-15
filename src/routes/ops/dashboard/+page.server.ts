@@ -30,24 +30,29 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
 		return (await q).count ?? 0;
 	};
 
-	const [{ count: signups }, recent, games, gamesToday, endless, clicks, shares] = await Promise.all([
-		c.from('signups').select('*', { count: 'exact', head: true }),
-		c.from('signups').select('email, created_at').order('created_at', { ascending: false }).limit(50),
-		countType('game_complete'),
-		countType('game_complete', since),
-		countType('endless_over'),
-		countType('amazon_click'),
-		countType('share')
-	]);
+	const [{ count: signups }, recent, starts, games, gamesToday, endless, clicks, shares, saves] =
+		await Promise.all([
+			c.from('signups').select('*', { count: 'exact', head: true }),
+			c.from('signups').select('email, created_at').order('created_at', { ascending: false }).limit(50),
+			countType('play_game'),
+			countType('game_complete'),
+			countType('game_complete', since),
+			countType('endless_over'),
+			countType('amazon_click'),
+			countType('share'),
+			countType('save_find')
+		]);
 
 	return {
 		configured: true,
 		signups: signups ?? 0,
 		recent: recent.data ?? [],
+		starts,
 		games,
 		gamesToday,
 		endless,
 		clicks,
-		shares
+		shares,
+		saves
 	} as const;
 };

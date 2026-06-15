@@ -4,7 +4,14 @@ import { db } from '$lib/server/supabase';
 
 // Only a small, known set of events is persisted (keeps the table lean and
 // rejects junk). Marketing-grade analytics still live in GA.
-const ALLOWED = new Set(['game_complete', 'endless_over', 'amazon_click', 'share']);
+const ALLOWED = new Set([
+	'play_game',
+	'game_complete',
+	'endless_over',
+	'amazon_click',
+	'share',
+	'save_find'
+]);
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json().catch(() => null);

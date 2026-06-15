@@ -84,6 +84,7 @@
 
 	async function startDaily() {
 		track('play_game', { mode: 'daily', category: cat.id });
+		logEvent('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
 		phase = 'loading';
 		copied = false;
@@ -108,6 +109,7 @@
 
 	function startEndless() {
 		track('play_game', { mode: 'endless' });
+		logEvent('play_game', { mode: 'endless' });
 		mode = 'endless';
 		copied = false;
 		rounds = buildEndlessDeck();
@@ -186,7 +188,10 @@
 
 	function toggleSave(prod: Product) {
 		const removing = saved.some((x) => x.name === prod.name);
-		if (!removing) track('save_find', { item: prod.name, category: prod.cat });
+		if (!removing) {
+			track('save_find', { item: prod.name, category: prod.cat });
+			logEvent('save_find', { item: prod.name, category: prod.cat });
+		}
 		saved = removing
 			? saved.filter((x) => x.name !== prod.name)
 			: [...saved, prod];
@@ -288,6 +293,13 @@
 			if (data.ok) {
 				subscribed = true;
 				track('subscribe', {});
+				// Best-effort mirror to Netlify Forms (dashboard inbox + notifications).
+				// Supabase stays the source of truth for /ops; this never blocks the UX.
+				fetch('/', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: new URLSearchParams({ 'form-name': 'signup', email }).toString()
+				}).catch(() => {});
 			}
 		} catch {
 			/* ignore */
