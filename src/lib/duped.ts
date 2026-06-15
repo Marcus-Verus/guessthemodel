@@ -33,11 +33,15 @@ export interface Product {
 	crowd?: number;
 }
 
+// One category per weekday (index = JS getUTCDay(): 0 = Sunday).
 export const CATEGORIES: Category[] = [
-	{ id: 'kitchen', label: 'Kitchen Crimes', emoji: '🍳' },
-	{ id: 'pets', label: 'Pet Nonsense', emoji: '🐾' },
-	{ id: 'office', label: 'Office Gags', emoji: '📎' },
-	{ id: 'home', label: 'Bed, Bath & Bizarre', emoji: '🛁' }
+	{ id: 'home', label: 'Bed, Bath & Bizarre', emoji: '🛁' }, // Sun
+	{ id: 'kitchen', label: 'Kitchen Crimes', emoji: '🍳' }, // Mon
+	{ id: 'tools', label: 'Tool Shed', emoji: '🔧' }, // Tue
+	{ id: 'office', label: 'Office Gags', emoji: '📎' }, // Wed
+	{ id: 'tech', label: 'Tech & Gadgets', emoji: '🔌' }, // Thu
+	{ id: 'pets', label: 'Pet Nonsense', emoji: '🐾' }, // Fri
+	{ id: 'garden', label: 'Garden & Outdoor', emoji: '🌿' } // Sat
 ];
 
 export const REAL_PRODUCTS: Product[] = [
@@ -78,7 +82,25 @@ export const REAL_PRODUCTS: Product[] = [
 	// ---- More Bed, Bath & Bizarre ----
 	{ cat: 'home', name: 'Squatty Potty', tagline: 'A footstool that puts your colon at the perfect angle.', price: '$24.99', rating: 4.7, emoji: '🚽', review: 'Life-changing. I tell strangers about it. They leave.', fact: 'Real - a Shark Tank smash with a unicorn ad.', buy: amz('squatty potty') },
 	{ cat: 'home', name: 'Motion Toilet Night Light', tagline: 'A bowl light that glows in 16 colors when you approach.', price: '$12.99', rating: 4.5, emoji: '🌈', review: '3am bathroom trips are now a tiny rave.', fact: 'Real - motion-activated and oddly delightful.', buy: amz('toilet night light motion') },
-	{ cat: 'home', name: 'Wearable Blanket Hoodie', tagline: 'A giant fleece sweatshirt-blanket you live inside.', price: '$39.99', rating: 4.6, emoji: '🧥', review: 'Put it on in October. See you in spring.', fact: 'Real - another Shark Tank cozy juggernaut.', buy: amz('wearable blanket hoodie oversized') }
+	{ cat: 'home', name: 'Wearable Blanket Hoodie', tagline: 'A giant fleece sweatshirt-blanket you live inside.', price: '$39.99', rating: 4.6, emoji: '🧥', review: 'Put it on in October. See you in spring.', fact: 'Real - another Shark Tank cozy juggernaut.', buy: amz('wearable blanket hoodie oversized') },
+	// ---- Tool Shed ----
+	{ cat: 'tools', name: 'Mini Chainsaw', tagline: 'A 6-inch one-handed chainsaw for light pruning.', price: '$39.99', rating: 4.4, emoji: '🪚', review: 'Trimmed a branch and my entire ego grew back.', fact: 'Real - the handheld mini chainsaw went viral.', buy: amz('mini chainsaw cordless 6 inch') },
+	{ cat: 'tools', name: 'Magnetic Wristband', tagline: 'A wristband that holds your screws while you work.', price: '$13.99', rating: 4.6, emoji: '🧲', review: 'My screws stopped running away. Marriage saved.', fact: 'Real - and genuinely useful.', buy: amz('magnetic wristband screws') },
+	{ cat: 'tools', name: 'Drill Brush Scrubbers', tagline: 'Scrub-brush heads that attach to your power drill.', price: '$12.99', rating: 4.5, emoji: '🧽', review: 'I drilled my bathtub clean. Felt unstoppable.', fact: 'Real - cleaning influencers love them.', buy: amz('drill brush power scrubber set') },
+	{ cat: 'tools', name: 'Tactical Pen', tagline: 'A pen that also breaks glass and means business.', price: '$16.99', rating: 4.3, emoji: '🖊️', review: 'Writes grocery lists, survives the apocalypse.', fact: 'Real - a very serious pen.', buy: amz('tactical pen glass breaker') },
+	{ cat: 'tools', name: 'Pocket Hand Chainsaw', tagline: 'A pocket-sized chain you saw logs with by hand.', price: '$10.99', rating: 4.2, emoji: '🪵', review: 'Cut a log at the campsite. Slept like a lumberjack.', fact: 'Real - a camping/survival staple.', buy: amz('pocket chainsaw hand') },
+	// ---- Tech & Gadgets ----
+	{ cat: 'tech', name: 'USB Mini Fridge', tagline: 'A desktop fridge that chills exactly one can.', price: '$28.99', rating: 4.0, emoji: '🧊', review: 'It holds one soda. That soda is my best friend.', fact: 'Real - peak desk flex.', buy: amz('usb mini fridge one can') },
+	{ cat: 'tech', name: 'Phone Screen Magnifier', tagline: 'A foldable screen that makes your phone movie-sized. Sort of.', price: '$15.99', rating: 3.9, emoji: '📱', review: 'Watched a film in glorious slightly-bigger.', fact: 'Real - the cardboard-era classic.', buy: amz('phone screen magnifier') },
+	{ cat: 'tech', name: 'Bluetooth Beanie', tagline: 'A knit hat with headphones built into it.', price: '$19.99', rating: 4.2, emoji: '🎧', review: 'Warm head, full playlist, zero earbuds lost.', fact: 'Real - surprisingly popular.', buy: amz('bluetooth beanie headphones') },
+	{ cat: 'tech', name: 'Glowing Smart Water Bottle', tagline: 'A bottle that glows to remind you to drink water.', price: '$34.99', rating: 4.1, emoji: '💧', review: 'It glows. I drink. I am a houseplant now.', fact: 'Real - hydration via peer pressure.', buy: amz('smart water bottle glow reminder') },
+	{ cat: 'tech', name: 'Mini Phone Fan', tagline: 'A tiny fan that plugs into your phone.', price: '$9.99', rating: 4.0, emoji: '🌀', review: 'Cooled my face and drained my battery. Fair trade.', fact: 'Real - a summer-commute lifesaver.', buy: amz('mini phone fan plug in') },
+	// ---- Garden & Outdoor ----
+	{ cat: 'garden', name: 'Bigfoot Garden Statue', tagline: 'A crouching Sasquatch lurking in your flower bed.', price: '$24.99', rating: 4.6, emoji: '🦶', review: 'Scared the mailman. Worth every penny.', fact: 'Real - cryptid lawn decor is a whole genre.', buy: amz('bigfoot garden statue') },
+	{ cat: 'garden', name: 'Garden Gnome', tagline: 'A classic bearded gnome to judge your weeds.', price: '$17.99', rating: 4.5, emoji: '🧙', review: 'He watches. He waits. The lawn behaves.', fact: 'Real - the original yard guardian.', buy: amz('garden gnome statue') },
+	{ cat: 'garden', name: 'Motion-Activated Animal Sprinkler', tagline: 'Blasts water at any critter that wanders into the yard.', price: '$49.99', rating: 4.4, emoji: '💦', review: 'Deer fled. Neighbor fled. Mostly the deer.', fact: 'Real - the Orbit Yard Enforcer is legendary.', buy: amz('motion activated sprinkler animal deterrent') },
+	{ cat: 'garden', name: 'Electric Fly Swatter', tagline: 'A tennis racket that zaps bugs on contact.', price: '$11.99', rating: 4.5, emoji: '🪰', review: 'Backyard tennis with consequences. 10/10.', fact: 'Real - oddly addictive.', buy: amz('electric fly swatter racket') },
+	{ cat: 'garden', name: 'Solar Dancing Flower', tagline: 'A plastic flower that wiggles in sunlight, forever.', price: '$8.99', rating: 4.3, emoji: '🌻', review: 'It dances on my windowsill. I envy its energy.', fact: 'Real - the dashboard-and-windowsill icon.', buy: amz('solar dancing flower') }
 ];
 
 export const FALLBACK_FAKES: Product[] = [
@@ -110,6 +132,21 @@ export const FALLBACK_FAKES: Product[] = [
 	// home
 	{ cat: 'home', name: 'DreamSubtitles Sleep Mask', tagline: 'Displays live subtitles of your dreams on the inside.', price: '$59.99', rating: 4.1, emoji: '😴', review: 'Last night was [INAUDIBLE] then a horse. Riveting.', fact: 'AI-invented. Dreams remain un-captioned.' },
 	{ cat: 'home', name: 'ThermostatTherapist', tagline: 'A thermostat that asks how the temperature makes you feel.', price: '$84.99', rating: 4.0, emoji: '🌡️', review: '"And how does 68 degrees sit with you?" We talked for an hour.', fact: 'AI-invented. Your thermostat is not licensed.' },
+	// tools
+	{ cat: 'tools', name: 'WD-41', tagline: 'Like WD-40, but it apologizes after every spray.', price: '$9.49', rating: 4.2, emoji: '🛢️', review: '"Sorry about the squeak," it whispered. Hinge fixed.', fact: 'AI-invented. There is no sorry in lubricant.' },
+	{ cat: 'tools', name: 'Self-Tightening Bolt', tagline: 'A bolt that tightens itself when it senses you getting frustrated.', price: '$14.99', rating: 4.0, emoji: '🔩', review: 'It read the room and snugged right up.', fact: 'AI-invented. Bolts cannot sense your rage.' },
+	{ cat: 'tools', name: 'Whisper Drill', tagline: 'A power drill that hums quietly so it never wakes the baby.', price: '$59.99', rating: 4.1, emoji: '🤫', review: 'Built a whole bookshelf during nap time.', fact: 'AI-invented. Drills are constitutionally loud.' },
+	{ cat: 'tools', name: 'Stud Finder: Ego Mode', tagline: 'Beeps when it locates the most confident person in the room.', price: '$21.99', rating: 3.9, emoji: '📡', review: 'It pointed straight at my brother-in-law. Accurate.', fact: 'AI-invented. It only finds wall studs, sadly.' },
+	// tech
+	{ cat: 'tech', name: 'Wi-Fi Extender for Feelings', tagline: 'Boosts emotional range so you sense people in the next room.', price: '$49.99', rating: 3.8, emoji: '📶', review: 'I felt my roommate sulking from the kitchen. Eerie.', fact: 'AI-invented. Feelings remain offline.' },
+	{ cat: 'tech', name: 'Smart Fork 2.0', tagline: 'Counts your bites and quietly judges each one.', price: '$39.99', rating: 4.0, emoji: '🍴', review: 'Bite 14 got a disappointed buzz. Rude but fair.', fact: 'AI-invented. Forks have no opinions. Yet.' },
+	{ cat: 'tech', name: 'Plant Earbuds', tagline: 'Noise-cancelling earbuds sized for your houseplants.', price: '$27.99', rating: 4.1, emoji: '🪴', review: 'My fern finally gets some peace and quiet.', fact: 'AI-invented. Plants do not commute.' },
+	{ cat: 'tech', name: 'Motivation AirTag', tagline: 'A tracker that tells you where you last left your motivation.', price: '$32.00', rating: 3.9, emoji: '🏷️', review: 'It said "the couch, 2019." Devastatingly correct.', fact: 'AI-invented. Some things cannot be found.' },
+	// garden
+	{ cat: 'garden', name: 'Anxious Garden Gnome', tagline: 'A gnome that only comes out of his little house at night.', price: '$22.99', rating: 4.2, emoji: '🏚️', review: 'We have never met. I respect his boundaries.', fact: 'AI-invented. Gnomes are famously unbothered.' },
+	{ cat: 'garden', name: 'Squirrel Speed Bump', tagline: 'A tiny speed bump to slow down reckless backyard squirrels.', price: '$15.99', rating: 4.0, emoji: '🐿️', review: 'They ignore it completely, but it feels official.', fact: 'AI-invented. Squirrels obey no laws.' },
+	{ cat: 'garden', name: 'Silent Wind Chimes', tagline: 'Weatherproof chimes engineered to make absolutely no sound.', price: '$18.99', rating: 4.4, emoji: '🎐', review: 'Finally, the peace of chimes without the chimes.', fact: 'AI-invented. That is just a decoration.' },
+	{ cat: 'garden', name: 'Self-Mowing Lawn Stone', tagline: 'A decorative rock that legally claims to mow your lawn.', price: '$29.99', rating: 3.7, emoji: '🪨', review: 'Grass is knee-high but the rock looks confident.', fact: 'AI-invented. Rocks do not mow.' },
 	// ---- More fakes (endless-deck balance) ----
 	// kitchen
 	{ cat: 'kitchen', name: 'MoodRing Spatula', tagline: 'The handle changes color based on how stressed your stirring is.', price: '$19.99', rating: 4.0, emoji: '🥄', review: 'It went red during gravy. The spatula knew.', fact: 'AI-invented. Your spatula has no feelings, probably.' },
@@ -136,8 +173,10 @@ export function shuffle<T>(arr: T[]): T[] {
 	return a;
 }
 
+// Category is fixed by weekday, so every Monday is the same category, etc.
 export function categoryForDay(day: number): Category {
-	return CATEGORIES[((day % CATEGORIES.length) + CATEGORIES.length) % CATEGORIES.length];
+	const weekday = new Date(day * 86400000).getUTCDay();
+	return CATEGORIES[weekday];
 }
 
 // Launch day (2026-06-15) is #1.

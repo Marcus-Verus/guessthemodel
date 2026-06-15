@@ -13,6 +13,17 @@ export const GET: RequestHandler = () => {
 		<changefreq>daily</changefreq>
 		<priority>1.0</priority>
 	</url>
+	<url>
+		<loc>${SITE_URL}/archive</loc>
+		<lastmod>${today}</lastmod>
+		<changefreq>daily</changefreq>
+		<priority>0.6</priority>
+	</url>
+	<url>
+		<loc>${SITE_URL}/faq</loc>
+		<changefreq>monthly</changefreq>
+		<priority>0.5</priority>
+	</url>
 </urlset>`;
 
 	return new Response(body, {
