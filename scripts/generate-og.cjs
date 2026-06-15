@@ -1,70 +1,95 @@
-#!/usr/bin/env node
-// Generates static/og.png — run once with: node scripts/generate-og.js
-const { createCanvas, registerFont } = require('canvas');
+// Generates static/og.png (1200x630) — the duped.gg social share card.
+// Run: node scripts/generate-og.cjs
 const fs = require('fs');
 const path = require('path');
+const { createCanvas, registerFont } = require('canvas');
+
+// Use the same display face the app self-hosts, so the card is pixel-matched.
+const FONT = path.join(__dirname, '..', 'static', 'fonts', 'ArchivoBlack-Regular.ttf');
+registerFont(FONT, { family: 'Archivo Black' });
+const DISP = '"Archivo Black"';
 
 const W = 1200;
 const H = 630;
+const COBALT = '#1230BF';
+const COBALT_DEEP = '#0B1F86';
+const TAG = '#FFD200';
+const INK = '#14171F';
+
 const canvas = createCanvas(W, H);
 const ctx = canvas.getContext('2d');
 
-// Background
-ctx.fillStyle = '#0D1117';
+// Background — radial wash matching the app.
+const bg = ctx.createRadialGradient(W * 0.5, -80, 80, W * 0.5, H * 0.4, 900);
+bg.addColorStop(0, '#2647E8');
+bg.addColorStop(0.45, COBALT);
+bg.addColorStop(1, COBALT_DEEP);
+ctx.fillStyle = bg;
 ctx.fillRect(0, 0, W, H);
 
-// Subtle grid pattern
-ctx.strokeStyle = '#161B22';
-ctx.lineWidth = 1;
-for (let x = 0; x <= W; x += 60) {
-  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-}
-for (let y = 0; y <= H; y += 60) {
-  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+// Starburst badge (same 24-point shape as the in-game burst).
+const BURST_PTS = [
+	[50, 0], [61, 12], [76, 6], [80, 22], [96, 24], [91, 39], [100, 50], [91, 61],
+	[96, 76], [80, 78], [76, 94], [61, 88], [50, 100], [39, 88], [24, 94], [20, 78],
+	[4, 76], [9, 61], [0, 50], [9, 39], [4, 24], [20, 22], [24, 6], [39, 12]
+];
+
+function starburst(cx, cy, size, rotation) {
+	ctx.save();
+	ctx.translate(cx, cy);
+	ctx.rotate(rotation);
+	ctx.beginPath();
+	BURST_PTS.forEach(([px, py], i) => {
+		const x = (px / 100 - 0.5) * size;
+		const y = (py / 100 - 0.5) * size;
+		if (i === 0) ctx.moveTo(x, y);
+		else ctx.lineTo(x, y);
+	});
+	ctx.closePath();
+	ctx.fillStyle = TAG;
+	ctx.shadowColor = 'rgba(0,0,0,0.35)';
+	ctx.shadowBlur = 30;
+	ctx.shadowOffsetY = 14;
+	ctx.fill();
+	ctx.restore();
 }
 
-// Left accent bar
-ctx.fillStyle = '#C3F73A';
-ctx.fillRect(80, 160, 6, 310);
+const badgeX = 960;
+const badgeY = 300;
+starburst(badgeX, badgeY, 360, -0.12);
 
-// Main title
+// Badge label.
+ctx.shadowColor = 'transparent';
+ctx.textAlign = 'center';
+ctx.fillStyle = INK;
+ctx.font = 'bold 26px sans-serif';
+ctx.fillText('REAL OR', badgeX, badgeY - 28);
+ctx.font = `92px ${DISP}`;
+ctx.fillText('AI?', badgeX, badgeY + 56);
+
+// Left-hand text block.
+ctx.textAlign = 'left';
+
+ctx.fillStyle = TAG;
+ctx.font = 'bold 24px sans-serif';
+ctx.fillText('R E A L   O R   A I ?   ·   D A I L Y   5   +   E N D L E S S', 92, 150);
+
 ctx.fillStyle = '#FFFFFF';
-ctx.font = 'bold 72px sans-serif';
-ctx.fillText('GuessTheModel', 116, 260);
+ctx.font = `150px ${DISP}`;
+ctx.fillText('DUPED', 88, 300);
+const dupedWidth = ctx.measureText('DUPED').width;
+ctx.fillStyle = TAG;
+ctx.fillText('.', 88 + dupedWidth + 4, 300);
 
-// Tagline
-ctx.fillStyle = '#C3F73A';
-ctx.font = 'bold 32px sans-serif';
-ctx.fillText('Can you tell which AI wrote this?', 116, 320);
+ctx.fillStyle = '#C9D2FF';
+ctx.font = '38px sans-serif';
+ctx.fillText('Ridiculous products. Some are really on Amazon.', 92, 380);
+ctx.fillText('Some an AI invented thirty seconds ago.', 92, 430);
 
-// Sub-tagline
-ctx.fillStyle = '#8B949E';
-ctx.font = '24px sans-serif';
-ctx.fillText('Vote blind · Guess the model · See if the crowd agrees', 116, 370);
+ctx.fillStyle = TAG;
+ctx.font = 'bold 40px sans-serif';
+ctx.fillText('duped.gg', 92, 540);
 
-// Bottom tag
-ctx.fillStyle = '#30363D';
-ctx.fillRect(116, 415, 220, 50);
-ctx.fillStyle = '#C3F73A';
-ctx.font = 'bold 18px sans-serif';
-ctx.fillText('guessthemodel.com', 130, 447);
-
-// Decorative model boxes on right
-const models = ['ChatGPT', 'Claude', 'Gemini', 'Grok', 'Perplexity'];
-const colors = ['#10A37F', '#D4A87B', '#4285F4', '#FFFFFF', '#20B2AA'];
-models.forEach((m, i) => {
-  const x = 780;
-  const y = 160 + i * 68;
-  ctx.fillStyle = '#161B22';
-  ctx.fillRect(x, y, 320, 52);
-  ctx.strokeStyle = colors[i] + '80';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, y, 320, 52);
-  ctx.fillStyle = colors[i];
-  ctx.font = 'bold 18px sans-serif';
-  ctx.fillText(m, x + 16, y + 33);
-});
-
-const out = path.resolve(__dirname, '../static/og.png');
+const out = path.join(__dirname, '..', 'static', 'og.png');
 fs.writeFileSync(out, canvas.toBuffer('image/png'));
-console.log('Generated', out);
+console.log('Wrote', out, `(${W}x${H})`);
