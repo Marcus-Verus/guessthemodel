@@ -29,21 +29,34 @@
 	}
 
 	let itemBusy = $state(-1);
-	async function regenItem(index: number) {
+	let urlInput = $state<Record<number, string>>({});
+
+	async function post(endpoint: string, index: number, extra: Record<string, unknown> = {}) {
 		if (itemBusy >= 0 || busy) return;
 		itemBusy = index;
 		try {
-			const res = await fetch('/ops/regen-item', {
+			const res = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ n: data.number, index })
+				body: JSON.stringify({ n: data.number, index, ...extra })
 			});
-			if (res.ok) await invalidateAll();
-			else msg = `Item regen failed (HTTP ${res.status}).`;
+			if (res.ok) {
+				const d = await res.json();
+				if (d.ok) await invalidateAll();
+				else msg = 'No change (image gen on? URL valid?).';
+			} else msg = `Failed (HTTP ${res.status}).`;
 		} catch (err) {
-			msg = `Item regen failed (${err instanceof Error ? err.message : 'network'}).`;
+			msg = `Failed (${err instanceof Error ? err.message : 'network'}).`;
 		}
 		itemBusy = -1;
+	}
+
+	const regenItem = (i: number) => post('/ops/regen-item', i);
+	const genImage = (i: number) => post('/ops/gen-image', i);
+	function setImage(i: number) {
+		const u = (urlInput[i] || '').trim();
+		if (!u) return;
+		post('/ops/set-image', i, { url: u });
 	}
 </script>
 
@@ -110,6 +123,23 @@
 					{#if it.isReal && it.buy}
 						<a class="buy" href={it.buy} target="_blank" rel="noopener noreferrer">Amazon link ↗</a>
 					{/if}
+
+					<div class="imgtools">
+						{#if it.isReal}
+							<input
+								class="urlin"
+								placeholder="Paste Amazon image URL"
+								bind:value={urlInput[i]}
+							/>
+							<button class="imbtn" onclick={() => setImage(i)} disabled={itemBusy >= 0 || busy}>
+								{itemBusy === i ? '…' : 'Set photo'}
+							</button>
+						{:else}
+							<button class="imbtn" onclick={() => genImage(i)} disabled={itemBusy >= 0 || busy}>
+								{itemBusy === i ? '…' : it.img ? 'Regen photo' : 'Gen photo'}
+							</button>
+						{/if}
+					</div>
 				</div>
 			</div>
 		{/each}
@@ -324,5 +354,36 @@
 		font-size: 12px;
 		font-weight: 700;
 		text-decoration: none;
+	}
+	.imgtools {
+		margin-top: 10px;
+		padding-top: 10px;
+		border-top: 1px solid #232a33;
+		display: flex;
+		gap: 6px;
+	}
+	.urlin {
+		flex: 1;
+		min-width: 0;
+		background: #0d1117;
+		border: 1px solid #2f3946;
+		color: #e6e8ef;
+		border-radius: 6px;
+		padding: 6px 8px;
+		font-size: 11px;
+	}
+	.imbtn {
+		border: 1px solid #2f3946;
+		background: #1230bf;
+		color: #fff;
+		border-radius: 6px;
+		padding: 6px 10px;
+		font-size: 11px;
+		font-weight: 700;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.imbtn:disabled {
+		opacity: 0.6;
 	}
 </style>
