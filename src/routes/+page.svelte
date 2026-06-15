@@ -137,6 +137,7 @@
 		if (mode === 'endless') {
 			if (strikes >= 3) {
 				track('endless_over', { run, best: bestRun });
+				logEvent('endless_over', { run, best: bestRun });
 				phase = 'endlessOver';
 				return;
 			}
@@ -162,6 +163,7 @@
 				category: cat.id,
 				used_live: usedLive
 			});
+			logEvent('game_complete', { score, category: cat.id });
 			phase = 'results';
 		} else {
 			idx += 1;
@@ -198,6 +200,7 @@
 
 	async function copyShare() {
 		track('share', { method: 'copy', mode, score });
+		logEvent('share', { mode });
 		const txt = shareText();
 		try {
 			await navigator.clipboard.writeText(txt);
@@ -226,6 +229,57 @@
 		if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
 			window.gtag('event', event, params);
 		}
+	}
+
+	// Fire-and-forget beacon to our own store (Supabase) for the ops dashboard.
+	function logEvent(type: string, meta: Record<string, unknown> = {}) {
+		if (typeof navigator === 'undefined') return;
+		try {
+			const body = JSON.stringify({ type, meta });
+			if (navigator.sendBeacon) {
+				navigator.sendBeacon('/api/event', new Blob([body], { type: 'application/json' }));
+			} else {
+				fetch('/api/event', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body,
+					keepalive: true
+				});
+			}
+		} catch {
+			/* analytics must never break the game */
+		}
+	}
+
+	function amazonClick(item: string, category: string, source: string) {
+		track('amazon_click', { item, category, source });
+		logEvent('amazon_click', { item, category, source });
+	}
+
+	let email = $state('');
+	let botField = $state(''); // honeypot — real users never fill this
+	let subscribing = $state(false);
+	let subscribed = $state(false);
+
+	async function submitEmail(e: SubmitEvent) {
+		e.preventDefault();
+		if (subscribing || !email) return;
+		subscribing = true;
+		try {
+			const res = await fetch('/api/subscribe', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, bot: botField })
+			});
+			const data = await res.json();
+			if (data.ok) {
+				subscribed = true;
+				track('subscribe', {});
+			}
+		} catch {
+			/* ignore */
+		}
+		subscribing = false;
 	}
 
 	// SERP-tuned: title ~51 chars (<580px), description ~150 chars (<920px).
@@ -327,7 +381,7 @@
 							href={r.buy}
 							target="_blank"
 							rel="noopener noreferrer sponsored"
-							onclick={() => track('amazon_click', { item: r.name, category: r.cat, source: 'shop_list' })}
+							onclick={() => amazonClick(r.name, r.cat, 'shop_list')}
 						>AMAZON →</a>
 					{/if}
 				</div>
@@ -397,6 +451,34 @@
 			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
 			<button class="endlessbtn" onclick={startEndless}>∞ ENDLESS — 3 STRIKES AND OUT</button>
 			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
+
+			{#if subscribed}
+				<p class="subnote">Thanks — see you tomorrow. 👋</p>
+			{:else}
+				<form class="emailform" onsubmit={submitEmail}>
+					<input
+						type="email"
+						bind:value={email}
+						placeholder="you@email.com"
+						aria-label="Email"
+						required
+					/>
+					<input
+						type="text"
+						tabindex="-1"
+						autocomplete="off"
+						aria-hidden="true"
+						bind:value={botField}
+						name="bot"
+						style="display:none"
+					/>
+					<button type="submit" disabled={subscribing}>
+						{subscribing ? '…' : 'NOTIFY ME'}
+					</button>
+				</form>
+				<p class="subnote">New category daily — get a nudge. No spam.</p>
+			{/if}
+
 			{#if saved.length > 0}
 				<div class="savedwrap">
 					{@render shopList(saved, `♥ SAVED FINDS (${saved.length})`)}
@@ -476,7 +558,7 @@
 					href={p.buy}
 					target="_blank"
 					rel="noopener noreferrer sponsored"
-					onclick={() => track('amazon_click', { item: p.name, category: p.cat, source: 'reveal' })}
+					onclick={() => amazonClick(p.name, p.cat, 'reveal')}
 				>
 					IT'S REALLY ON AMAZON →<small>SEE FOR YOURSELF</small>
 				</a>
