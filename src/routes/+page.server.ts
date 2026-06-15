@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getPuzzleForDay } from '$lib/server/daily';
+import { db } from '$lib/server/supabase';
 import { numberForDay, dayForNumber } from '$lib/duped';
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {
@@ -17,6 +18,19 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 
 	const puzzle = await getPuzzleForDay(day);
 
+	// Social proof: how many games started since the start of today (UTC).
+	let playedToday = 0;
+	const c = db();
+	if (c) {
+		const since = new Date(today * 86400000).toISOString();
+		const { count } = await c
+			.from('events')
+			.select('*', { count: 'exact', head: true })
+			.eq('type', 'play_game')
+			.gte('created_at', since);
+		playedToday = count ?? 0;
+	}
+
 	// Shared puzzles are immutable for the day — let the CDN cache briefly.
 	setHeaders({ 'cache-control': 'public, max-age=60' });
 
@@ -28,6 +42,7 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 			items: puzzle.items,
 			live: puzzle.live
 		},
-		isArchive
+		isArchive,
+		playedToday
 	};
 };

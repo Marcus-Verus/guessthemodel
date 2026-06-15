@@ -524,6 +524,13 @@ body {
 	color: #8fa0f2;
 	font-weight: 700;
 }
+.proof {
+	margin-top: 12px;
+	font-size: 13px;
+	font-weight: 700;
+	color: #c9f7d4;
+	letter-spacing: 0.02em;
+}
 .archivelink {
 	display: inline-block;
 	margin-top: 14px;
