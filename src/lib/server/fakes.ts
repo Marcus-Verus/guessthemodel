@@ -8,15 +8,16 @@ const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const OPENROUTER_MODEL_DEFAULT = 'anthropic/claude-sonnet-4.5';
 
 export function fakesPrompt(catLabel: string): string {
-	return `Invent 3 fictional products in the category "${catLabel}" for a "real or fake?" guessing game. They must be HARD to tell apart from real Amazon novelty products.
+	return `Invent 3 fictional products in the category "${catLabel}" for a "real or fake?" guessing game. They are fake, but should be hard to dismiss at a glance.
 
-Rules for believability:
-- Use plain, realistic product names like a real brand would use. NO puns, NO portmanteaus, NO jokey or cutesy names (avoid things like "GravyAlarm" or "ThermostatTherapist").
-- The product should sound like it could genuinely be for sale. The absurdity should be subtle - something a real company *might* actually have made, that only feels off on a second thought. Aim for "wait, is that real?", not "obviously fake".
-- Keep the customer review dry and matter-of-fact, like a real reviewer. No winking at the camera.
+THE KEY RULE: each product must do something IMPOSSIBLE or clearly absurd — something no real product could actually do. The impossible capability is what makes it fake. Examples of the right kind of twist: it predicts the future, reads emotions or moods, defies physics, talks or has opinions, ripens fruit in seconds, sees through walls, heals cracked glass, tastes food.
+
+DO NOT invent ordinary, real products. If a real company plausibly already sells it (a silicone sink stopper, a garlic press, a phone stand, a cable organizer, a yoga mat), it is WRONG — that is a real product, not a fake. The everyday object is fine ONLY if you give it a capability that genuinely cannot exist.
+
+Style: plain, realistic product names (no puns, no jokey names). Keep the customer review dry and matter-of-fact.
 
 Respond ONLY with a JSON array, no markdown fences, no other text. Each item:
-{"name": "...", "tagline": "one plain sentence describing what it does", "price": "$XX.XX", "rating": 3.8, "emoji": "a single representative emoji", "review": "one short, believable customer review", "fact": "one short line starting with 'AI-invented.' that confirms it is fake"}
+{"name": "...", "tagline": "one plain sentence describing the impossible thing it does", "price": "$XX.XX", "rating": 3.8, "emoji": "a single representative emoji", "review": "one short, believable customer review", "fact": "one short line starting with 'AI-invented.' that confirms it is fake"}
 
 Names under 4 words. Ratings between 3.7 and 4.8.`;
 }
