@@ -1,0 +1,15 @@
+{
+	"name": "DUPED — Real or AI?",
+	"short_name": "DUPED",
+	"description": "Real Amazon products vs. AI fakes. Play the daily 5 and endless survival.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait",
+	"background_color": "#1230BF",
+	"theme_color": "#1230BF",
+	"icons": [
+		{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+		{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+	]
+}

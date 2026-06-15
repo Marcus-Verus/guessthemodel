@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { SITE_NAME, SITE_URL, OG_IMAGE } from '$lib/seo';
 	import {
 		CATEGORIES,
 		REAL_PRODUCTS,
 		buildDailyRounds,
 		buildEndlessDeck,
+		dailyNumber,
 		todaysCategory,
 		tomorrowsCategory,
 		type Product
@@ -32,11 +34,41 @@
 	let copied = $state(false);
 	let usedLive = $state(false);
 	let saved = $state<Product[]>([]); // array of real products
+	let playedDay = $state(0); // day index of the last completed daily
+	let hydrated = $state(false); // localStorage loaded?
 
-	// Cache of live fakes per category id — a plain (non-reactive) ref.
-	const liveCache: Record<string, Product[] | null> = {};
 	const cat = todaysCategory();
 	const tomorrow = tomorrowsCategory();
+	const today = Math.floor(Date.now() / 86400000);
+
+	// Persist brag-state (streak/games/best run/saved finds + played-today)
+	// across reloads — the whole point of a daily streak.
+	const STORE_KEY = 'duped:v1';
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(STORE_KEY);
+			if (raw) {
+				const s = JSON.parse(raw);
+				streak = s.streak ?? 0;
+				games = s.games ?? 0;
+				bestRun = s.bestRun ?? 0;
+				saved = Array.isArray(s.saved) ? s.saved : [];
+				playedDay = s.playedDay ?? 0;
+			}
+		} catch {
+			/* ignore corrupt storage */
+		}
+		hydrated = true;
+	});
+	$effect(() => {
+		if (!hydrated || typeof localStorage === 'undefined') return;
+		const data = JSON.stringify({ streak, games, bestRun, saved, playedDay });
+		try {
+			localStorage.setItem(STORE_KEY, data);
+		} catch {
+			/* quota/private mode — ignore */
+		}
+	});
 
 	const score = $derived(guesses.filter((g) => g.correct).length);
 	const p = $derived<Product | undefined>(rounds[idx]);
@@ -50,36 +82,25 @@
 					.filter((x): x is Product => Boolean(x))
 	);
 
-	async function fetchFakes(catLabel: string): Promise<Product[] | null> {
-		try {
-			const res = await fetch('/api/fakes', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ category: catLabel })
-			});
-			if (!res.ok) return null;
-			const data = await res.json();
-			return Array.isArray(data.fakes) && data.fakes.length >= 3 ? data.fakes : null;
-		} catch {
-			return null;
-		}
-	}
-
 	async function startDaily() {
 		track('play_game', { mode: 'daily', category: cat.id });
+		logEvent('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
 		phase = 'loading';
 		copied = false;
-		let fakes = liveCache[cat.id];
-		if (!fakes) {
-			fakes = await Promise.race([
-				fetchFakes(cat.label),
-				new Promise<null>((r) => setTimeout(() => r(null), 9000))
-			]);
+		// The daily puzzle is the same #N for everyone — fetch the shared one.
+		try {
+			const res = await fetch('/api/daily');
+			const data = await res.json();
+			rounds =
+				Array.isArray(data.items) && data.items.length
+					? (data.items as Product[])
+					: buildDailyRounds(cat, null);
+			usedLive = !!data.live;
+		} catch {
+			rounds = buildDailyRounds(cat, null);
+			usedLive = false;
 		}
-		usedLive = !!fakes;
-		liveCache[cat.id] = null;
-		rounds = buildDailyRounds(cat, fakes);
 		idx = 0;
 		guesses = [];
 		revealed = false;
@@ -88,10 +109,10 @@
 
 	function startEndless() {
 		track('play_game', { mode: 'endless' });
+		logEvent('play_game', { mode: 'endless' });
 		mode = 'endless';
 		copied = false;
-		const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
-		rounds = buildEndlessDeck(extras);
+		rounds = buildEndlessDeck();
 		idx = 0;
 		guesses = [];
 		strikes = 0;
@@ -99,15 +120,6 @@
 		revealed = false;
 		phase = 'play';
 	}
-
-	// Pre-warm fakes for today's category while playing.
-	$effect(() => {
-		if (phase === 'play' && !liveCache[cat.id]) {
-			fetchFakes(cat.label).then((f) => {
-				if (f) liveCache[cat.id] = f;
-			});
-		}
-	});
 
 	function guess(saidReal: boolean) {
 		if (revealed || !p) return;
@@ -136,13 +148,13 @@
 		if (mode === 'endless') {
 			if (strikes >= 3) {
 				track('endless_over', { run, best: bestRun });
+				logEvent('endless_over', { run, best: bestRun });
 				phase = 'endlessOver';
 				return;
 			}
 			if (idx + 1 >= rounds.length) {
 				// reshuffle a fresh deck and keep going
-				const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
-				rounds = buildEndlessDeck(extras);
+				rounds = buildEndlessDeck();
 				idx = 0;
 			} else {
 				idx += 1;
@@ -151,8 +163,13 @@
 			return;
 		}
 		if (idx + 1 >= rounds.length) {
-			streak = score >= 4 ? streak + 1 : 0;
-			games += 1;
+			// Streak/games only move on the first daily completion of the day,
+			// so replaying today can't farm the streak.
+			if (playedDay !== today) {
+				streak = score >= 4 ? streak + 1 : 0;
+				games += 1;
+				playedDay = today;
+			}
 			track('game_complete', {
 				mode: 'daily',
 				score,
@@ -161,6 +178,7 @@
 				category: cat.id,
 				used_live: usedLive
 			});
+			logEvent('game_complete', { score, category: cat.id });
 			phase = 'results';
 		} else {
 			idx += 1;
@@ -170,7 +188,10 @@
 
 	function toggleSave(prod: Product) {
 		const removing = saved.some((x) => x.name === prod.name);
-		if (!removing) track('save_find', { item: prod.name, category: prod.cat });
+		if (!removing) {
+			track('save_find', { item: prod.name, category: prod.cat });
+			logEvent('save_find', { item: prod.name, category: prod.cat });
+		}
 		saved = removing
 			? saved.filter((x) => x.name !== prod.name)
 			: [...saved, prod];
@@ -179,21 +200,16 @@
 
 	function shareText(): string {
 		if (mode === 'endless') {
-			return [
-				'DUPED ∞ — real-or-AI survival 🤖',
-				`I survived ${run} in a row (best ${bestRun}).`,
-				'Think you can outlast it?',
-				'Play free → duped.gg'
-			].join('\n');
+			return [`DUPED ∞`, `${run} in a row (best ${bestRun}) 🤖`, 'Play free → duped.gg'].join(
+				'\n'
+			);
 		}
 		const grid = guesses.map((g) => (g.correct ? '🟩' : '🟥')).join('');
 		const fooled = guesses.find((g) => !g.correct);
 		const fire = streak > 0 ? ` 🔥${streak}` : '';
-		const tail = fooled
-			? `Duped by “${fooled.name}” 😅 Your turn.`
-			: 'Un-dupable 😎 Bet you can’t.';
+		const tail = fooled ? `Duped by “${fooled.name}” 😅` : 'Un-dupable 😎';
 		return [
-			`DUPED ${cat.emoji} ${cat.label}`,
+			`DUPED #${dailyNumber()}`,
 			`${grid}  ${score}/5${fire}`,
 			tail,
 			'Play free → duped.gg'
@@ -202,6 +218,7 @@
 
 	async function copyShare() {
 		track('share', { method: 'copy', mode, score });
+		logEvent('share', { mode });
 		const txt = shareText();
 		try {
 			await navigator.clipboard.writeText(txt);
@@ -232,10 +249,68 @@
 		}
 	}
 
+	// Fire-and-forget beacon to our own store (Supabase) for the ops dashboard.
+	function logEvent(type: string, meta: Record<string, unknown> = {}) {
+		if (typeof navigator === 'undefined') return;
+		try {
+			const body = JSON.stringify({ type, meta });
+			if (navigator.sendBeacon) {
+				navigator.sendBeacon('/api/event', new Blob([body], { type: 'application/json' }));
+			} else {
+				fetch('/api/event', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body,
+					keepalive: true
+				});
+			}
+		} catch {
+			/* analytics must never break the game */
+		}
+	}
+
+	function amazonClick(item: string, category: string, source: string) {
+		track('amazon_click', { item, category, source });
+		logEvent('amazon_click', { item, category, source });
+	}
+
+	let email = $state('');
+	let botField = $state(''); // honeypot — real users never fill this
+	let subscribing = $state(false);
+	let subscribed = $state(false);
+
+	async function submitEmail(e: SubmitEvent) {
+		e.preventDefault();
+		if (subscribing || !email) return;
+		subscribing = true;
+		try {
+			const res = await fetch('/api/subscribe', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, bot: botField })
+			});
+			const data = await res.json();
+			if (data.ok) {
+				subscribed = true;
+				track('subscribe', {});
+				// Best-effort mirror to Netlify Forms (dashboard inbox + notifications).
+				// Supabase stays the source of truth for /ops; this never blocks the UX.
+				fetch('/', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: new URLSearchParams({ 'form-name': 'signup', email }).toString()
+				}).catch(() => {});
+			}
+		} catch {
+			/* ignore */
+		}
+		subscribing = false;
+	}
+
 	// SERP-tuned: title ~51 chars (<580px), description ~150 chars (<920px).
-	const title = 'DUPED — Real Amazon Finds vs. AI Fakes | Daily Game';
+	const title = 'DUPED - Real Amazon Finds vs. AI Fakes | Daily Game';
 	const description =
-		'Real Amazon products or AI fakes? Some are genuinely for sale, some an AI just invented. Play the daily 5 and endless survival — don’t get duped.';
+		'Real Amazon products or AI fakes? Some are genuinely for sale, some an AI just invented. Play the daily 5 and endless survival - don’t get duped.';
 
 	// Structured data for Google/Bing. Split the closing tag so the .svelte
 	// parser doesn't end the component script early.
@@ -269,7 +344,7 @@
 	<meta property="og:image" content={OG_IMAGE} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="DUPED — real Amazon products vs. AI fakes" />
+	<meta property="og:image:alt" content="DUPED - real Amazon products vs. AI fakes" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
@@ -331,7 +406,7 @@
 							href={r.buy}
 							target="_blank"
 							rel="noopener noreferrer sponsored"
-							onclick={() => track('amazon_click', { item: r.name, category: r.cat, source: 'shop_list' })}
+							onclick={() => amazonClick(r.name, r.cat, 'shop_list')}
 						>AMAZON →</a>
 					{/if}
 				</div>
@@ -401,6 +476,34 @@
 			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
 			<button class="endlessbtn" onclick={startEndless}>∞ ENDLESS — 3 STRIKES AND OUT</button>
 			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
+
+			{#if subscribed}
+				<p class="subnote">Thanks — see you tomorrow. 👋</p>
+			{:else}
+				<form class="emailform" onsubmit={submitEmail}>
+					<input
+						type="email"
+						bind:value={email}
+						placeholder="you@email.com"
+						aria-label="Email"
+						required
+					/>
+					<input
+						type="text"
+						tabindex="-1"
+						autocomplete="off"
+						aria-hidden="true"
+						bind:value={botField}
+						name="bot"
+						style="display:none"
+					/>
+					<button type="submit" disabled={subscribing}>
+						{subscribing ? '…' : 'NOTIFY ME'}
+					</button>
+				</form>
+				<p class="subnote">New category daily — get a nudge. No spam.</p>
+			{/if}
+
 			{#if saved.length > 0}
 				<div class="savedwrap">
 					{@render shopList(saved, `♥ SAVED FINDS (${saved.length})`)}
@@ -480,7 +583,7 @@
 					href={p.buy}
 					target="_blank"
 					rel="noopener noreferrer sponsored"
-					onclick={() => track('amazon_click', { item: p.name, category: p.cat, source: 'reveal' })}
+					onclick={() => amazonClick(p.name, p.cat, 'reveal')}
 				>
 					IT'S REALLY ON AMAZON →<small>SEE FOR YOURSELF</small>
 				</a>

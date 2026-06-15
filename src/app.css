@@ -700,6 +700,53 @@ body {
 	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
 	text-align: left;
 }
+.emailform {
+	display: flex;
+	gap: 8px;
+	max-width: 430px;
+	margin: 18px auto 0;
+}
+.emailform input[type='email'] {
+	flex: 1;
+	border: 2px solid rgba(255, 255, 255, 0.4);
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	border-radius: 12px;
+	padding: 13px 14px;
+	font-size: 15px;
+	font-family: inherit;
+}
+.emailform input[type='email']::placeholder {
+	color: #c9d2ff;
+	opacity: 0.7;
+}
+.emailform input[type='email']:focus-visible {
+	outline: 3px solid var(--tag);
+	outline-offset: 2px;
+}
+.emailform button {
+	border: none;
+	border-radius: 12px;
+	padding: 0 16px;
+	cursor: pointer;
+	background: var(--tag);
+	color: var(--ink);
+	font-family: 'Archivo Black', 'Arial Black', Arial, sans-serif;
+	font-size: 13px;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+.emailform button:disabled {
+	opacity: 0.6;
+}
+.subnote {
+	margin-top: 9px;
+	font-size: 11px;
+	color: #8fa0f2;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
 .footer {
 	margin-top: 34px;
 	font-size: 11px;
