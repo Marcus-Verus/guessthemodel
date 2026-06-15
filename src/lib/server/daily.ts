@@ -66,15 +66,17 @@ export function getDailyPuzzle(): Promise<DailyPuzzle> {
 
 /**
  * Pre-seed a day. Generates it if missing, or if the stored category is stale
- * (after a schedule change). Returns created:true when it (re)generated. Needs
- * Supabase.
+ * (after a schedule change). With force=true it always regenerates, overwriting
+ * the stored puzzle (use this to pull in new products/fakes). Needs Supabase.
  */
-export async function ensureDay(day: number): Promise<{ day: number; created: boolean }> {
+export async function ensureDay(day: number, force = false): Promise<{ day: number; created: boolean }> {
 	const c = db();
 	if (!c) return { day, created: false };
-	const existing = await c.from('daily_puzzles').select('category').eq('day', day).maybeSingle();
-	if (existing.data && existing.data.category === categoryForDay(day).id) {
-		return { day, created: false };
+	if (!force) {
+		const existing = await c.from('daily_puzzles').select('category').eq('day', day).maybeSingle();
+		if (existing.data && existing.data.category === categoryForDay(day).id) {
+			return { day, created: false };
+		}
 	}
 	await buildAndStore(day, categoryForDay(day));
 	return { day, created: true };

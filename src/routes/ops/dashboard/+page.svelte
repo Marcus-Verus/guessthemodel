@@ -46,19 +46,21 @@
 
 	let seeding = $state(false);
 	let seedMsg = $state('');
-	async function preseed() {
+	async function seed(force: boolean) {
 		if (seeding) return;
 		seeding = true;
 		seedMsg = '';
 		try {
-			const res = await fetch('/ops/seed?days=7', { method: 'POST' });
-			if (!res.ok) seedMsg = `Pre-seed failed (HTTP ${res.status}).`;
+			const res = await fetch(`/ops/seed?days=7${force ? '&force=1' : ''}`, { method: 'POST' });
+			if (!res.ok) seedMsg = `Failed (HTTP ${res.status}).`;
 			else {
 				const d = await res.json();
-				seedMsg = `Pre-seeded ${d.created} new day(s). Reload to refresh.`;
+				seedMsg = force
+					? `Regenerated ${d.created} day(s) with the latest content. Reload to refresh.`
+					: `Pre-seeded ${d.created} new day(s). Reload to refresh.`;
 			}
 		} catch (err) {
-			seedMsg = `Pre-seed failed (${err instanceof Error ? err.message : 'network'}).`;
+			seedMsg = `Failed (${err instanceof Error ? err.message : 'network'}).`;
 		}
 		seeding = false;
 	}
@@ -115,8 +117,11 @@
 		</div>
 
 		<h2>Upcoming week</h2>
-		<button class="action" onclick={preseed} disabled={seeding}>
-			{seeding ? 'Pre-seeding…' : 'Pre-seed next 7 days'}
+		<button class="action" onclick={() => seed(false)} disabled={seeding}>
+			{seeding ? 'Working…' : 'Pre-seed missing days'}
+		</button>
+		<button class="action regen" onclick={() => seed(true)} disabled={seeding}>
+			{seeding ? 'Working…' : 'Regenerate this week (overwrite)'}
 		</button>
 		{#if seedMsg}<span class="seedmsg">{seedMsg}</span>{/if}
 		<div class="week">
@@ -419,6 +424,10 @@
 	}
 	.action:disabled {
 		opacity: 0.6;
+	}
+	.action.regen {
+		background: #7a1d1d;
+		margin-left: 8px;
 	}
 	.seedmsg {
 		margin-left: 10px;
