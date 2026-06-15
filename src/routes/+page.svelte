@@ -508,6 +508,9 @@
 				DUPED #{data.daily.number} · {cat.emoji} {cat.label.toUpperCase()}
 			</div>
 			<button class="playbtn" onclick={startDaily}>PLAY TODAY'S 5</button>
+			{#if data.playedToday >= 10}
+				<div class="proof">🟢 {data.playedToday.toLocaleString()} played today</div>
+			{/if}
 			<div class="meta">NO SIGNUP · 60 SECONDS · BRAG FOREVER</div>
 			<a class="archivelink" href="/archive">▦ Past days</a>
 
