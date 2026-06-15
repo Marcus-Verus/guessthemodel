@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { SITE_NAME, SITE_URL, OG_IMAGE } from '$lib/seo';
 	import {
 		CATEGORIES,
@@ -33,11 +34,41 @@
 	let copied = $state(false);
 	let usedLive = $state(false);
 	let saved = $state<Product[]>([]); // array of real products
+	let playedDay = $state(0); // day index of the last completed daily
+	let hydrated = $state(false); // localStorage loaded?
 
-	// Cache of live fakes per category id — a plain (non-reactive) ref.
-	const liveCache: Record<string, Product[] | null> = {};
 	const cat = todaysCategory();
 	const tomorrow = tomorrowsCategory();
+	const today = Math.floor(Date.now() / 86400000);
+
+	// Persist brag-state (streak/games/best run/saved finds + played-today)
+	// across reloads — the whole point of a daily streak.
+	const STORE_KEY = 'duped:v1';
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(STORE_KEY);
+			if (raw) {
+				const s = JSON.parse(raw);
+				streak = s.streak ?? 0;
+				games = s.games ?? 0;
+				bestRun = s.bestRun ?? 0;
+				saved = Array.isArray(s.saved) ? s.saved : [];
+				playedDay = s.playedDay ?? 0;
+			}
+		} catch {
+			/* ignore corrupt storage */
+		}
+		hydrated = true;
+	});
+	$effect(() => {
+		if (!hydrated || typeof localStorage === 'undefined') return;
+		const data = JSON.stringify({ streak, games, bestRun, saved, playedDay });
+		try {
+			localStorage.setItem(STORE_KEY, data);
+		} catch {
+			/* quota/private mode — ignore */
+		}
+	});
 
 	const score = $derived(guesses.filter((g) => g.correct).length);
 	const p = $derived<Product | undefined>(rounds[idx]);
@@ -51,36 +82,24 @@
 					.filter((x): x is Product => Boolean(x))
 	);
 
-	async function fetchFakes(catLabel: string): Promise<Product[] | null> {
-		try {
-			const res = await fetch('/api/fakes', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ category: catLabel })
-			});
-			if (!res.ok) return null;
-			const data = await res.json();
-			return Array.isArray(data.fakes) && data.fakes.length >= 3 ? data.fakes : null;
-		} catch {
-			return null;
-		}
-	}
-
 	async function startDaily() {
 		track('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
 		phase = 'loading';
 		copied = false;
-		let fakes = liveCache[cat.id];
-		if (!fakes) {
-			fakes = await Promise.race([
-				fetchFakes(cat.label),
-				new Promise<null>((r) => setTimeout(() => r(null), 9000))
-			]);
+		// The daily puzzle is the same #N for everyone — fetch the shared one.
+		try {
+			const res = await fetch('/api/daily');
+			const data = await res.json();
+			rounds =
+				Array.isArray(data.items) && data.items.length
+					? (data.items as Product[])
+					: buildDailyRounds(cat, null);
+			usedLive = !!data.live;
+		} catch {
+			rounds = buildDailyRounds(cat, null);
+			usedLive = false;
 		}
-		usedLive = !!fakes;
-		liveCache[cat.id] = null;
-		rounds = buildDailyRounds(cat, fakes);
 		idx = 0;
 		guesses = [];
 		revealed = false;
@@ -91,8 +110,7 @@
 		track('play_game', { mode: 'endless' });
 		mode = 'endless';
 		copied = false;
-		const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
-		rounds = buildEndlessDeck(extras);
+		rounds = buildEndlessDeck();
 		idx = 0;
 		guesses = [];
 		strikes = 0;
@@ -100,15 +118,6 @@
 		revealed = false;
 		phase = 'play';
 	}
-
-	// Pre-warm fakes for today's category while playing.
-	$effect(() => {
-		if (phase === 'play' && !liveCache[cat.id]) {
-			fetchFakes(cat.label).then((f) => {
-				if (f) liveCache[cat.id] = f;
-			});
-		}
-	});
 
 	function guess(saidReal: boolean) {
 		if (revealed || !p) return;
@@ -143,8 +152,7 @@
 			}
 			if (idx + 1 >= rounds.length) {
 				// reshuffle a fresh deck and keep going
-				const extras = Object.values(liveCache).flat().filter(Boolean) as Product[];
-				rounds = buildEndlessDeck(extras);
+				rounds = buildEndlessDeck();
 				idx = 0;
 			} else {
 				idx += 1;
@@ -153,8 +161,13 @@
 			return;
 		}
 		if (idx + 1 >= rounds.length) {
-			streak = score >= 4 ? streak + 1 : 0;
-			games += 1;
+			// Streak/games only move on the first daily completion of the day,
+			// so replaying today can't farm the streak.
+			if (playedDay !== today) {
+				streak = score >= 4 ? streak + 1 : 0;
+				games += 1;
+				playedDay = today;
+			}
 			track('game_complete', {
 				mode: 'daily',
 				score,
