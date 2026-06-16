@@ -61,6 +61,9 @@
 			/* ignore corrupt storage */
 		}
 		hydrated = true;
+		// Warm the image cache while the player reads the title screen, so cards
+		// (real and fake) all appear instantly once they start.
+		preloadImages(data.daily.items.map((r) => r.img).filter((u): u is string => !!u));
 		// Archive links (?day=N) jump straight into that day's puzzle.
 		if (data.isArchive) startDaily();
 	});
@@ -90,18 +93,41 @@
 					.filter((x): x is Product => Boolean(x))
 	);
 
-	function startDaily() {
+	// Preload images so every card appears instantly - otherwise Amazon's CDN
+	// (real) loads faster than Supabase (fakes), which is a timing tell.
+	function preloadImages(urls: string[], capMs = 4000): Promise<void> {
+		if (typeof window === 'undefined' || urls.length === 0) return Promise.resolve();
+		return new Promise((resolve) => {
+			let done = 0;
+			const finish = () => {
+				if (++done >= urls.length) resolve();
+			};
+			setTimeout(resolve, capMs); // never block forever
+			for (const u of urls) {
+				const im = new Image();
+				im.onload = im.onerror = finish;
+				im.src = u;
+			}
+		});
+	}
+
+	async function startDaily() {
 		track('play_game', { mode: 'daily', category: cat.id });
 		logEvent('play_game', { mode: 'daily', category: cat.id });
 		mode = 'daily';
 		copied = false;
-		// The puzzle is preloaded and shared (same #N for everyone), so this is
-		// instant - no spinner.
 		rounds = data.daily.items.length ? data.daily.items : buildDailyRounds(cat, null);
 		usedLive = data.daily.live;
 		idx = 0;
 		guesses = [];
 		revealed = false;
+		// If this day uses photos, ensure they're all cached before the first
+		// card shows (usually already warm from the title-screen preload).
+		const imgs = rounds.map((r) => r.img).filter((u): u is string => !!u);
+		if (imgs.length === rounds.length) {
+			phase = 'loading';
+			await preloadImages(imgs);
+		}
 		phase = 'play';
 	}
 
@@ -533,6 +559,13 @@
 					As an Amazon Associate, duped.gg earns from qualifying purchases.
 				</span>
 			</footer>
+		</div>
+	{/if}
+
+	{#if phase === 'loading'}
+		<div class="loadwrap">
+			<div class="spinner" aria-hidden="true"></div>
+			<div class="sub">Shuffling today's lineup…</div>
 		</div>
 	{/if}
 
