@@ -198,19 +198,21 @@
 
 	function shareText(): string {
 		if (mode === 'endless') {
-			return [`DUPED ∞`, `${run} in a row (best ${bestRun}) 🤖`, 'Play free → duped.gg'].join(
-				'\n'
-			);
+			return [
+				`DUPED ∞`,
+				`${run} in a row (best ${bestRun}) 🤖`,
+				'Play free → https://duped.gg'
+			].join('\n');
 		}
 		const grid = guesses.map((g) => (g.correct ? '🟩' : '🟥')).join('');
-		const fooled = guesses.find((g) => !g.correct);
 		const fire = streak > 0 ? ` 🔥${streak}` : '';
-		const tail = fooled ? `Duped by “${fooled.name}” 😅` : 'Un-dupable 😎';
+		// No product names - that would spoil the shared daily for everyone else.
+		const tail = guesses.some((g) => !g.correct) ? 'Got duped 😅' : 'Un-dupable 😎';
 		return [
 			`DUPED #${data.daily.number}`,
 			`${grid}  ${score}/5${fire}`,
 			tail,
-			'Play free → duped.gg'
+			'Play free → https://duped.gg'
 		].join('\n');
 	}
 

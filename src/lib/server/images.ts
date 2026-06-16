@@ -30,9 +30,10 @@ export async function generateProductImage(name: string, tagline: string): Promi
 	if (!c) return { error: 'Supabase not configured' };
 
 	const prompt =
-		`Studio product photo of "${name}": ${tagline}. ` +
-		`A single product centered on a plain white background, soft even lighting, ` +
-		`sharp focus, no text, no watermark, no people - styled like an Amazon listing main image.`;
+		`Professional e-commerce product photo of "${name}": ${tagline}. ` +
+		`The single product is centered and fills most of the frame on a PURE FLAT WHITE #FFFFFF seamless background. ` +
+		`Absolutely no gradient, no vignette, no grey edges, no colored backdrop, no floor or table surface, no props, no text, no watermark, no people. ` +
+		`Even studio lighting, only a soft shadow directly beneath the product, sharp focus - exactly like an Amazon main listing image on plain white.`;
 
 	try {
 		const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {

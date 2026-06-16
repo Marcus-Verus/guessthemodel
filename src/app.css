@@ -138,7 +138,7 @@ body {
 	border-radius: 10px;
 	margin: 12px 0 2px;
 	position: relative;
-	background: radial-gradient(circle at 50% 35%, #ffffff 0%, #edeff4 70%, #dde1ea 100%);
+	background: #ffffff;
 	border: 1px solid #e4e7ee;
 	display: flex;
 	align-items: center;
