@@ -1,9 +1,61 @@
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/supabase';
+import { Jimp } from 'jimp';
 
 const BUCKET = 'puzzle-images';
 // Grok image model by default; override with OPENROUTER_IMAGE_MODEL.
 const DEFAULT_IMAGE_MODEL = 'x-ai/grok-imagine-image-quality';
+
+/**
+ * Knock the background out to pure white. Image models keep adding a soft
+ * studio gradient no matter the prompt, which makes fakes look different from
+ * Amazon's flat-white shots. We flood-fill from the edges, turning any
+ * neutral-light background connected to the border into #FFFFFF, while leaving
+ * the product (and any interior light areas) intact.
+ */
+async function whitenBackground(input: Buffer): Promise<Buffer> {
+	const image = await Jimp.fromBuffer(input);
+	const { data, width, height } = image.bitmap;
+	const isBg = (i: number) => {
+		const r = data[i], g = data[i + 1], b = data[i + 2];
+		const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+		return mx >= 210 && mx - mn <= 22; // neutral + light = background/shadow
+	};
+	const visited = new Uint8Array(width * height);
+	const stack: number[] = [];
+	const push = (x: number, y: number) => {
+		if (x >= 0 && x < width && y >= 0 && y < height) {
+			const p = y * width + x;
+			if (!visited[p]) stack.push(p);
+		}
+	};
+	for (let x = 0; x < width; x++) {
+		push(x, 0);
+		push(x, height - 1);
+	}
+	for (let y = 0; y < height; y++) {
+		push(0, y);
+		push(width - 1, y);
+	}
+	while (stack.length) {
+		const p = stack.pop()!;
+		if (visited[p]) continue;
+		visited[p] = 1;
+		const i = p * 4;
+		if (!isBg(i)) continue;
+		data[i] = 255;
+		data[i + 1] = 255;
+		data[i + 2] = 255;
+		data[i + 3] = 255;
+		const x = p % width;
+		const y = (p - x) / width;
+		push(x - 1, y);
+		push(x + 1, y);
+		push(x, y - 1);
+		push(x, y + 1);
+	}
+	return image.getBuffer('image/png');
+}
 
 /** On whenever OpenRouter + Supabase are available (Grok is the default model). */
 export function imagesEnabled(): boolean {
@@ -81,9 +133,20 @@ export async function generateProductImage(name: string, tagline: string): Promi
 			return { error: 'Unrecognized image URL format' };
 		}
 
-		const ext = (contentType.split('/')[1] || 'png').replace('jpeg', 'jpg');
+		// Knock the background out to pure white so fakes match Amazon's flat
+		// white. Falls back to the original bytes if processing fails.
+		let outBytes = bytes;
+		let outType = contentType;
+		try {
+			outBytes = await whitenBackground(bytes);
+			outType = 'image/png';
+		} catch {
+			/* keep original */
+		}
+
+		const ext = (outType.split('/')[1] || 'png').replace('jpeg', 'jpg');
 		const path = `fakes/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-		const up = await c.storage.from(BUCKET).upload(path, bytes, { contentType, upsert: true });
+		const up = await c.storage.from(BUCKET).upload(path, outBytes, { contentType: outType, upsert: true });
 		if (up.error) return { error: `Storage upload failed: ${up.error.message}` };
 
 		const publicUrl = c.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;

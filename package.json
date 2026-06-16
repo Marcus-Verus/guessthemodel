@@ -30,6 +30,7 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.93.3",
+		"jimp": "^1.6.1",
 		"lucide-svelte": "^0.563.0"
 	}
 }
